@@ -1,0 +1,14 @@
+/* Only keeping essential styles that aren't easily replicated with Tailwind */
+
+#checkout {
+    width: 80%;
+    height: 80%;
+    background-color: #1b1b1b;
+}
+
+@media (max-width: 768px) {
+    #checkout {
+        width: 100%;
+        height: 100%;
+    }
+}

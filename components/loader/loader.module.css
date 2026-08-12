@@ -1,0 +1,45 @@
+.wrapper {
+    max-width: fit-content;
+    padding: 10px 14px;
+}
+
+.content {
+    font-size: 14px;
+    color: #fff;
+    letter-spacing: 0.15em;
+}
+
+.content span {
+    display: inline-block;
+    animation: fade 0.6s linear infinite alternate;
+}
+
+.content span:nth-child(6n+1) {
+    animation-delay: 0.1s;
+}
+
+.content span:nth-child(6n+2) {
+    animation-delay: 0.2s;
+}
+
+.content span:nth-child(6n+3) {
+    animation-delay: 0.3s;
+}
+
+.content span:nth-child(6n+4) {
+    animation-delay: 0.4s;
+}
+
+.content span:nth-child(6n+5) {
+    animation-delay: 0.5s;
+}
+
+.content span:nth-child(6n+6) {
+    animation-delay: 0.6s;
+}
+
+@keyframes fade {
+    to {
+        opacity: 0;
+    }
+}

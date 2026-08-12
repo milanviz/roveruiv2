@@ -1,0 +1,84 @@
+List Project
+Mode: roverprojectlistforgetstarteddashboardchild67e68a347bae6
+ Input: No input
+Raw Output: {
+    "features": [
+        {
+            "MenuID": "20",
+            "MenuTitle": "Mind Mapping",
+            "Type": "Menu",
+            "URL": "#tiny.url/ls/liveapps.view/mindmapcreate66333218c0cc7",
+            "Visible": "Visible",
+            "AIAgent": "ALL"
+        },
+        {
+            "MenuID": "12",
+            "MenuTitle": "Ask Rover",
+            "Type": "MenuSection",
+            "URL": "#tiny.url/ls/liveapps.view/askrover",
+            "Visible": "Visible",
+            "AIAgent": "ALL"
+        }
+    ],
+    "projects": [
+        {
+            "ProjectID": "1",
+            "ProjectName": "AI Research Hub",
+            "Summary": "An analysis space for exploring AI-driven automation.",
+            "AIAgent": "Rover",
+            "CreatedBy": "Chaithanya",
+            "CreatedDate": "2025-11-10"
+        },
+        {
+            "ProjectID": "2",
+            "ProjectName": "Smart Data Synthesizer",
+            "Summary": "Processes CSV files based on natural language queries.",
+            "AIAgent": "VizAI",
+            "CreatedBy": "Abhijith",
+            "CreatedDate": "2025-10-28"
+        }
+    ]
+}
+:two: Create Project
+Mode: roverProjectCreateforgetstarted67efdd66a4730
+ Input: {
+    "projectname": "Scenario modelling for Mitsui",
+    "aiagent": "Growth Opportunity"
+}
+Raw Output: {
+    "data": "[{\"ProjectID\":\"1234abcd-5678-ef90-gh12-3456ijkl7890\",\"ProjectName\":\"AI Research Hub\",\"Summary\":\"<p>The AI Research Hub is a collaborative workspace designed for exploring artificial intelligence innovations and applications across industries.<\\/p>\",\"Workspace\":\"Innovation\",\"WorkspaceCode\":\"WS-2001\",\"AIAgent\":\"Rover\",\"rowID\":\"abcd1234-ef56-7890-gh12-ijkl34567890\"}]"
+}
+:three: AI Query & Event Stream
+:four: Add to Insight
+Mode: rovervoting663c9be56ba31
+ Input: {
+    "wid": "rovervoting663c9be56ba31",
+    "type": "0",
+    "qid": "db3f97f5-261d-4156-b7bf-11d5179b283f",
+    "follow": true,
+    "userlist": "[\"shobana@vizru.com\"]",
+    "count": "1"
+}
+ 
+:five: Insight List
+Mode: Datalist
+:six: File List
+Mode: Datalist
+:seven: Upload File
+Mode: workflow__1950113703_datacenterfileuploadbg65eee7d2831b8
+ Input: {
+    "FID": "2346",
+    "FileName": "dummy-pdf_2.pdf",
+    "CreatedAt": "2025-11-07 12:49:16",
+    "uploadedBy": "Shobana",
+    "PublishedDate": "11/07/2025",
+    "usermail": "shobana@vizru.com",
+    "FileSize": "7 KB",
+    "ProjectID": "f9f711a6-f8bc-4858-abd5-60ad8aa05a39",
+    "flag": "true",
+    "MimeType": "application/pdf",
+    "FileFullPath": "https://demo.vizru.studio/sys/core/files.pxy/348-166-0/2346",
+    "FilePath": "u_348/348__1762519756__dummy-pdf_2.pdf",
+    "JobId": "pdf_vector_status",
+    "jobId": "vizru_690deacd3c6525.45729778"
+}

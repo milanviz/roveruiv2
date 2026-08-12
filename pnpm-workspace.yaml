@@ -1,0 +1,11 @@
+allowBuilds:
+  better-sqlite3: set this to true or false
+  canvas: true
+  core-js: true
+  sharp: true
+  unrs-resolver: true
+onlyBuiltDependencies:
+  - canvas
+  - core-js
+  - sharp
+  - unrs-resolver

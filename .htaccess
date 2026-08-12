@@ -1,0 +1,28 @@
+Options -MultiViews
+RewriteEngine On
+AddDefaultCharset UTF-8
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(html|htm)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "-1"
+    </FilesMatch>
+</IfModule>
+
+# Root request → load exported index.html
+RewriteRule ^$ out/index.html [L]
+
+# Serve real files & folders normally
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Try matching folder-based exported pages
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+#RewriteCond %{DOCUMENT_ROOT}/roverv2/out/$1/index.html -f
+RewriteRule ^(.*)$ out/$1/index.html [L]
+
+# Fallback to main SPA entry
+RewriteRule ^.*$ out/index.html [L]

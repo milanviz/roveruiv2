@@ -1,0 +1,383 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.98 0 0);
+  --foreground: oklch(0.12 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.12 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.12 0 0);
+  /* --primary: oklch(0.56 0.18 264); */
+  --icon-primary: #3378E0;
+  --primary: #75A5ED;
+  --primary-foreground: oklch(1 0 0);
+  --icon-secondary: #F3686D;
+  --secondary: oklch(0.95 0 0);
+  --secondary-foreground: oklch(0.12 0 0);
+  --muted: oklch(0.93 0 0);
+  --muted-foreground: oklch(0.56 0 0);
+  --accent: oklch(0.56 0.18 264);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0.58 0.24 27.33);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.91 0 0);
+  --input: oklch(0.95 0 0);
+  --ring: oklch(0.56 0.18 264);
+  --chart-1: oklch(0.56 0.18 264);
+  --chart-2: oklch(0.69 0.17 162.48);
+  --chart-3: oklch(0.77 0.19 70.08);
+  --chart-4: oklch(0.63 0.27 303.9);
+  --chart-5: oklch(0.65 0.25 16.44);
+  --radius: 0.5rem;
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.12 0 0);
+  --sidebar-primary: oklch(0.56 0.18 264);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.95 0 0);
+  --sidebar-accent-foreground: oklch(0.12 0 0);
+  --sidebar-border: oklch(0.91 0 0);
+  --sidebar-ring: oklch(0.56 0.18 264);
+  --lighttext: #DEDEDE;
+  --icon-background: #D9D9D9B2;
+  --primary-text: #FFFFFF;
+  /* color-scheme: dark; */
+}
+
+.dark {
+  /* Updated to Rover AI dark theme - deeper blacks and vibrant purple accent */
+  --background: #0a0a0a;
+  --foreground: #e8e8ea;
+  --card: #131315;
+  --card-foreground: #e8e8ea;
+  --popover: #131315;
+  --popover-foreground: #e8e8ea;
+  /* --primary: #8b5cf6; */
+  --icon-primary: #3378E0;
+  --primary: #75A5ED;
+  --primary-foreground: #0a0a0a;
+  --icon-secondary: #F3686D;
+  --secondary: #1a1a1f;
+  --secondary-foreground: #a8a8ae;
+  --muted: #1a1a1f;
+  --muted-foreground: #7a7a80;
+  --accent: #8b5cf6;
+  --accent-foreground: #0a0a0a;
+  --destructive: oklch(0.56 0.22 25.72);
+  --destructive-foreground: oklch(0.97 0 0);
+  --border: #222226;
+  --input: #1a1a1f;
+  --ring: #8b5cf6;
+  --chart-1: #8b5cf6;
+  --chart-2: oklch(0.69 0.17 162.48);
+  --chart-3: oklch(0.77 0.19 70.08);
+  --chart-4: oklch(0.63 0.27 303.9);
+  --chart-5: oklch(0.65 0.25 16.44);
+  --sidebar: #0f0f13;
+  --sidebar-foreground: #a8a8ae;
+  --sidebar-primary: #8b5cf6;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #1a1a1f;
+  --sidebar-accent-foreground: #e8e8ea;
+  --sidebar-border: #1a1a1f;
+  --sidebar-ring: #8b5cf6;
+  --lighttext: #DEDEDE;
+  --icon-background: #D9D9D9B2;
+  --primary-text: #FFFFFF;
+}
+
+@theme inline {
+  /* --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback"; */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-inter), ui-monospace, monospace;
+  /* keep if needed */
+  --color-lighttext: var(--lighttext);
+  /* ← FIXED (semicolon added) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-icon-primary: var(--icon-primary);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-icon-secondary: var(--icon-secondary);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-icon-background: var(--icon-background);
+  --color-primary-text: var(--primary-text);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body {
+    background-color: #12121200; /* dark fallback */
+    min-height: 100%;
+  }
+
+  body {
+    /* @apply bg-background text-foreground; */
+    background-image: var(--bg-image-url) !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--bg-image-url);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+}
+
+@layer utilities {
+
+  /* Added scrollbar-hide utility for hidden but scrollable elements */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#AE98FF] to-[#C8C5D0];
+  }
+
+  .gradient-title {
+    @apply text-xl font-normal inline-block pb-1 whitespace-nowrap;
+    @apply bg-gradient-to-r from-[#AE98FF] to-[#C8C5D0] text-transparent bg-clip-text;
+  }
+
+  .container-gradient {
+    @apply bg-gradient-to-r from-[#693FD9] to-[#3C70E1];
+  }
+
+  .container-gradient1 {
+    @apply bg-gradient-to-r from-[#F54D97] to-[#A81757];
+  }
+
+  .container-gradient2 {
+    @apply bg-gradient-to-r from-[#F3825D] to-[#B14D2C];
+  }
+
+  .button-gradient {
+    @apply bg-gradient-to-r from-[#FFFFF] to-[#A81757];
+  }
+
+.btn-gradient {
+  @apply bg-gradient-to-r from-[#323392] to-[#682E9C]
+         hover:from-[#682E9C] hover:to-[#323392]
+         text-white;
+}
+
+  @layer utilities {
+    .card-bg-gradient {
+      @apply bg-gradient-to-r from-[#3C70E1] via-[#693FD9] to-[#3C70E1];
+    }
+
+    .hover\:card-bg-gradient:hover {
+      @apply bg-gradient-to-r from-[#3C70E1] via-[#693FD9] to-[#3C70E1];
+    }
+  }
+
+  @layer utilities {
+    .container-bg-gradient {
+      @apply bg-gradient-to-r from-[#4E3DB6] to-[#8556B4];
+    }
+
+    /* HOVER REVERSE GRADIENT */
+    .hover\:container-bg-gradient:hover {
+      @apply bg-gradient-to-r from-[#8556B4] to-[#4E3DB6];
+    }
+  }
+
+  @layer utilities {
+    .darkblue-darkpink-gradient {
+      @apply bg-gradient-to-r from-[#323392] to-[#682E9C];
+    }
+
+    /* HOVER REVERSE GRADIENT */
+    .hover\:darkblue-darkpink-gradient:hover {
+      @apply bg-gradient-to-r from-[#323392] to-[#682E9C];
+    }
+  }
+
+  .common-border {
+    border: 1px solid #3C3C3C !important;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-track {
+    background: #111016;
+    border-radius: 8px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    background: #3d3d45;
+    border-radius: 8px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background: #6b6b76;
+  }
+
+  /* Firefox */
+  .scrollbar-custom {
+    scrollbar-width: thin;
+    scrollbar-color: #3d3d45 #111016;
+  }
+
+  .cb {
+    width: 16px;
+    height: 16px;
+    appearance: none;
+    background-color: #0a0a0a;
+    border: 1px solid #666;
+    border-radius: 4px;
+  }
+
+  .cb:checked {
+    background-color: #0a0a0a;
+    border-color: #3378E0;
+  }
+
+  .vertical-gradient-line {
+    width: 1px;
+    height: 70%;
+    background: linear-gradient(to bottom,
+        rgba(255, 255, 255, 0.015),
+        rgba(255, 255, 255, 0.18),
+        rgba(255, 255, 255, 0.015));
+  }
+
+  .underline-gradient {
+    @apply absolute bottom-0 left-0 w-full h-[1px] opacity-0 transition-opacity duration-300;
+    background: linear-gradient(to right, transparent 0%, #3378E0 25%, #8A38F5 75%, transparent 100%);
+  }
+
+  .group:hover .underline-gradient {
+    opacity: 1;
+  }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none !important;
+    /* IE and Edge */
+    scrollbar-width: none !important;
+    /* Firefox */
+  }
+
+
+}
+
+/* html, body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+}
+
+.card {
+  @apply bg-zinc-900/70 backdrop-blur border border-white/10 rounded-2xl shadow-soft;
+} */
+.react-pdf__Document {
+  overflow-x: hidden !important;
+}
+
+/* Make PDF pages responsive */
+.react-pdf__Page {
+  max-width: 100% !important;
+  width: 100% !important;
+  height: auto !important;
+  margin: 0 auto 24px auto !important;
+}
+
+/* Ensure canvas scales with container */
+.react-pdf__Page canvas {
+  max-width: 100% !important;
+  width: 100% !important;
+  height: auto !important;
+}
+
+.react-doc-viewer-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+.react-pdf__Document {
+  display: flex;
+  flex-direction: column;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Ensure PDF pages stack vertically */
+.react-pdf__Document {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Smooth scroll inside the viewer container */
+.react-doc-viewer,
+.react-doc-viewer-content {
+  scroll-behavior: smooth;
+}
+
+/* Add natural spacing between pages */
+.react-pdf__Page {
+  margin-bottom: 32px !important;
+}

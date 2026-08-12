@@ -1,0 +1,1441 @@
+{
+  "scriptId": "aan-paavam-static",
+  "projectId": "aan-paavam",
+  "metadata": {
+    "title": "ஆண் பாவம்",
+    "titleEnglish": "Aan Paavam",
+    "language": "Tamil",
+    "genre": "Comedy Drama",
+    "targetMarket": "Kollywood / Tamil Nadu + Diaspora",
+    "releaseStrategy": "Theatrical & OTT",
+    "expectedBudget": "₹10–15 Cr",
+    "pages": 92,
+    "runtimeMinutes": 110,
+    "filename": "aan paavam feb 2024.pdf",
+    "writer": "Kalaiarasan T",
+    "presentedBy": "Black Sheep Production",
+    "year": "2023/2024",
+    "scriptId": "aan-paavam-static"
+  },
+  "analysis": {
+    "sections": {
+      "overview": {
+        "generatedAt": "2026-08-11T15:11:55.000Z",
+        "data": {
+          "recommendation": {
+            "status": "DEVELOP",
+            "score": 68,
+            "confidence": "Medium",
+            "summary": "A contemporary relationship satire exploring modern gender dynamics, social media obsession, and legal battles surrounding marriage. While it features strong commercial potential for Tamil cinema, the pacing and repetitive marital conflicts need refinement."
+          },
+          "scores": {
+            "story": 70,
+            "commercial": 75,
+            "production": 65,
+            "audience": 72,
+            "originality": 78,
+            "risk": 55
+          },
+          "logline": "An arranged-cum-love marriage deteriorates into a bitter legal battle when clashing ideals of modern independence, social media validation, and traditional roles tear a young couple apart.",
+          "synopsis": "Siva and Sakthi enter into a modern arranged marriage that initially appears ideal. However, underlying tensions quickly emerge as Sakthi, influenced heavily by social media trends and radical feminist viewpoints, constantly clashes with Siva over household duties, financial independence, and personal boundaries. Their relationship disintegrates amidst constant arguments, public social media shaming, and irreconcilable ideological differences.\n\nThe couple eventually reaches the Family Welfare Court, advised by cunning lawyers like Narayanan and Lakshmi. What starts as petty marital disputes escalates into complex legal warfare involving domestic violence accusations, false claims, and societal judgment. As both families get dragged into the messy litigation, Siva and Sakthi experience the harsh realities of legal battles and separation.\n\nAfter months of painful court proceedings, mutual realizations, and witnessing the misery of prolonged legal separation, both Siva and Sakthi begin to understand the compromises required in a relationship. In a climactic turnaround during their final hearing, Sakthi drops her divorce plea, signaling a tentative step toward reconciliation.",
+          "attributes": {
+            "pages": 92,
+            "runtimeMinutes": 110,
+            "shootDays": 45,
+            "locations": 12,
+            "nightScenes": 10,
+            "actionSequences": 2,
+            "majorCast": 6,
+            "vfxScenes": 5,
+            "extras": 150,
+            "songs": 3
+          },
+          "risks": [
+            {
+              "title": "Gender Dynamics Sensitivity",
+              "severity": "High",
+              "summary": "The film deals heavily with modern feminism, marital disputes, and legal system biases, which could invite polarizing audience reactions and censorship scrutiny.",
+              "evidence": "Extensive courtroom arguments and recurring domestic conflicts debating gender roles and legal provisions like 498A."
+            },
+            {
+              "title": "Repetitive Narrative Beats",
+              "severity": "Medium",
+              "summary": "The second act features numerous recurring arguments over social media reels, household chores, and court dates that could slow down the narrative pace.",
+              "evidence": "Multiple montage sequences and repeated court hearing scenes covering similar interpersonal grievances."
+            }
+          ],
+          "opportunities": [
+            {
+              "title": "Relatable Contemporary Themes",
+              "summary": "Appeals strongly to urban and youth demographics by incorporating social media culture, Instagram trends, and modern relationship anxieties."
+            },
+            {
+              "title": "Strong Comedy-Drama Blend",
+              "summary": "Balances heavy courtroom drama with witty situational humor and satirical commentary, fitting well into the Kollywood commercial comedy-drama space."
+            }
+          ]
+        }
+      },
+      "story": {
+        "generatedAt": "2026-08-11T15:11:55.000Z",
+        "data": {
+          "scores": {
+            "story": 75,
+            "originality": 80
+          },
+          "storyScorecard": {
+            "structuralPacing": "Fair",
+            "structuralPacingNotes": "Courtship and early marriage move briskly; Act 2 court-hearing cycles (Saidapet Family Welfare Court through repeated hearing montages) become repetitive before the final reconciliation.",
+            "climaxBuild": "Good",
+            "climaxBuildNotes": "Legal warfare and ego collisions escalate into an emotional last-chance hearing where Sakthi withdraws the divorce demand and both face the cost of prolonged separation."
+          },
+          "timelineEvents": [
+            {
+              "title": "Title Tease — Corn Flakes vs Coffee",
+              "description": "Opening cold open: Siva–Sakthi flat LED TV debate over who runs the world, cutting to Black Sheep titles.",
+              "page": 1,
+              "tension": 35
+            },
+            {
+              "title": "Matchmaking & Social Vetting",
+              "description": "Palanisamy brokers Sakthi’s match; friends reverse-image-search Siva’s profiles across FB/Insta/Twitter.",
+              "page": 3,
+              "tension": 30
+            },
+            {
+              "title": "Hero Intro Montage",
+              "description": "Siva introduced through Josiyar house, coffee shop, theater, and temple social-media montage.",
+              "page": 5,
+              "tension": 40
+            },
+            {
+              "title": "Wedding & Honeymoon High",
+              "description": "Marriage hall celebration followed by montage song as the couple settles into modern married life.",
+              "page": 12,
+              "tension": 45
+            },
+            {
+              "title": "Domestic Fault Lines",
+              "description": "Household chores, thaali/lifestyle debates, and Instagram-couple performativity spark escalating fights.",
+              "page": 18,
+              "tension": 62
+            },
+            {
+              "title": "Fight Montage / Interval Setup",
+              "description": "Day/night fight montage song and boutique/court intercuts push the marriage toward legal action.",
+              "page": 28,
+              "tension": 78
+            },
+            {
+              "title": "Family Welfare Court Filed",
+              "description": "Saidapet Family Welfare Court and counselling track begins; lawyers enter the arena.",
+              "page": 35,
+              "tension": 82
+            },
+            {
+              "title": "Police & 498A Pressure",
+              "description": "Women’s police station and remand threat sequences raise stakes beyond a civil dispute.",
+              "page": 48,
+              "tension": 90
+            },
+            {
+              "title": "Rival Lawyers — Narayanan vs Lakshmi",
+              "description": "Cynical divorce counsel Narayanan clashes with feminist counsel Lakshmi; compromises and ego battles dominate.",
+              "page": 55,
+              "tension": 88
+            },
+            {
+              "title": "Counselling & Ego Mirror",
+              "description": "Counselling room and side characters force both leads to confront ego, trauma, and performative feminism vs entitlement.",
+              "page": 70,
+              "tension": 75
+            },
+            {
+              "title": "Final Hearing / Withdrawal",
+              "description": "Judge presses mutual settlement; Sakthi drops divorce demand; Siva withdraws conjugal-rights claim — tentative reconciliation.",
+              "page": 85,
+              "tension": 55
+            },
+            {
+              "title": "Return to the Flat",
+              "description": "Closing returns to the Siva–Sakthi flat — unresolved but hopeful, echoing the opening debate.",
+              "page": 92,
+              "tension": 40
+            }
+          ],
+          "cinemaEvaluation": {
+            "heroIntro": "Good",
+            "heroIntroDesc": "Siva is introduced via Gen-Z social-media reverse search and lifestyle montage rather than a conventional mass entry.",
+            "intervalCliffhanger": "Good",
+            "intervalCliffhangerDesc": "Marriage collapse + fight montage lands the couple at Saidapet Family Welfare Court, flipping romance into litigation.",
+            "climaxEmotionalPayoff": "Good",
+            "climaxEmotionalPayoffDesc": "Final hearing forces ego surrender: divorce withdrawn, settlement paused, relationship tentatively restarted.",
+            "massMoments": "Fair",
+            "massMomentsDesc": "Whistle moments are satirical courtroom zingers and social-media call-outs rather than action set pieces.",
+            "songsIntegration": "Good",
+            "songsIntegrationDesc": "Three montage songs (romance, fight, time-lapse court/life) compress relationship arcs without full song-and-dance interruptions."
+          },
+          "indianCinemaSignals": [
+            {
+              "name": "Hero Introduction Block",
+              "rating": "Good",
+              "explanation": "Siva is introduced via Gen-Z social-media reverse search and lifestyle montage rather than a conventional mass entry."
+            },
+            {
+              "name": "Interval Cliffhanger",
+              "rating": "Good",
+              "explanation": "Marriage collapse + fight montage lands the couple at Saidapet Family Welfare Court, flipping romance into litigation."
+            },
+            {
+              "name": "Climax Emotional Payoff",
+              "rating": "Good",
+              "explanation": "Final hearing forces ego surrender: divorce withdrawn, settlement paused, relationship tentatively restarted."
+            },
+            {
+              "name": "Mass Moments",
+              "rating": "Fair",
+              "explanation": "Whistle moments are satirical courtroom zingers and social-media call-outs rather than action set pieces."
+            },
+            {
+              "name": "Songs Integration",
+              "rating": "Good",
+              "explanation": "Three montage songs (romance, fight, time-lapse court/life) compress relationship arcs without full song-and-dance interruptions."
+            },
+            {
+              "name": "Family Court Drama",
+              "rating": "Excellent",
+              "explanation": "Saidapet Family Welfare Court, counselling, maintenance, and mutual-consent divorce mechanics are central to Act 2–3."
+            },
+            {
+              "name": "Social Media Satire",
+              "rating": "Excellent",
+              "explanation": "Influencer couple reels, DP culture, and public digital shaming drive conflict as much as domestic chores."
+            }
+          ],
+          "tensionCurve": [
+            {
+              "label": "Cold Open",
+              "tension": 35
+            },
+            {
+              "label": "Matchmaking",
+              "tension": 30
+            },
+            {
+              "label": "Wedding",
+              "tension": 45
+            },
+            {
+              "label": "Domestic Wars",
+              "tension": 65
+            },
+            {
+              "label": "Court Filed",
+              "tension": 82
+            },
+            {
+              "label": "Police Heat",
+              "tension": 92
+            },
+            {
+              "label": "Lawyer Duel",
+              "tension": 88
+            },
+            {
+              "label": "Ego Mirror",
+              "tension": 72
+            },
+            {
+              "label": "Final Hearing",
+              "tension": 55
+            },
+            {
+              "label": "Flat Return",
+              "tension": 40
+            }
+          ]
+        }
+      },
+      "characters": {
+        "generatedAt": "2026-08-11T15:11:55.000Z",
+        "data": {
+          "charactersList": [
+            {
+              "name": "சிவா (Siva)",
+              "role": "Lead / Husband",
+              "description": "An IT professional who marries Sakthi through an arranged-cum-love match, expecting a traditional and submissive partner, but struggles as she asserts her independence.",
+              "presence": "90%",
+              "dialogue": "45%",
+              "arc": "Exceptional",
+              "casting": "Critical",
+              "goal": "To maintain a comfortable, traditional marriage and resolve conflicts with his wife.",
+              "motivation": "Desire for peace, domestic harmony, and a predictable lifestyle.",
+              "conflict": "Clashes constantly with Sakthi over independence, division of household labor, social media culture, and personal choices.",
+              "transformation": "Evolves from an entitled and frustrated husband into a self-aware, remorseful partner willing to fight for his marriage and make mutual concessions."
+            },
+            {
+              "name": "சக்தி (Sakthi)",
+              "role": "Lead / Wife",
+              "description": "An independent, modern Gen Z woman with a feminist outlook who marries Siva, deeply affected by her traumatic past with her father.",
+              "presence": "90%",
+              "dialogue": "45%",
+              "arc": "Exceptional",
+              "casting": "Critical",
+              "goal": "To live life strictly on her own terms ('its my choice') without patriarchal control.",
+              "motivation": "Escaping generational patriarchal trauma and asserting absolute personal freedom and equality.",
+              "conflict": "Fights against Siva's expectations of traditional wifely duties and societal pressures from elders.",
+              "transformation": "Moves from rigid, defensive individualism to realizing the emotional toll of isolation, ultimately choosing to reconcile with Siva."
+            },
+            {
+              "name": "நாராயணன் (Narayanan)",
+              "role": "Supporting / Lawyer",
+              "description": "Siva's cynical, street-smart divorce lawyer who handles matrimonial disputes with dark humor and cynical pragmatism.",
+              "presence": "40%",
+              "dialogue": "25%",
+              "arc": "Moderate",
+              "casting": "High",
+              "goal": "To successfully navigate legal hurdles in Siva's divorce case while dealing with his own past.",
+              "motivation": "Professional duty blended with personal cynicism regarding modern relationships.",
+              "conflict": "Opposes Lakshmi in court while managing his own estranged relationship with his family.",
+              "transformation": "Gains emotional vulnerability upon hearing news of his own child through a phone call."
+            },
+            {
+              "name": "லட்சுமி (Lakshmi)",
+              "role": "Supporting / Lawyer",
+              "description": "Sakthi's fierce, uncompromising feminist lawyer who is an ex-wife with a bitter personal history regarding men and marriage.",
+              "presence": "35%",
+              "dialogue": "20%",
+              "arc": "Moderate",
+              "casting": "High",
+              "goal": "To win Sakthi's contested divorce and secure maximum legal and financial leverage.",
+              "motivation": "Radical feminist ideology fueled by personal trauma and a desire to dismantle patriarchal norms.",
+              "conflict": "Engages in intense courtroom and ideological battles against Narayanan and traditional family structures.",
+              "transformation": "Maintains her hardline stance throughout, though slightly challenged by Bharathi's perspective."
+            },
+            {
+              "name": "சித்து (Sithu)",
+              "role": "Supporting / Friend & Junior Lawyer",
+              "description": "Narayanan's associate and friend who assists Siva and Narayanan throughout the legal battle.",
+              "presence": "25%",
+              "dialogue": "15%",
+              "arc": "Weak",
+              "casting": "Medium",
+              "goal": "To assist Narayanan in legal proceedings and support Siva.",
+              "motivation": "Professional loyalty and camaraderie.",
+              "conflict": "Deals with the chaotic courtroom environment and police station standoffs.",
+              "transformation": "Remains a steady comedic and supportive sidekick."
+            },
+            {
+              "name": "பழனிசாமி (Palanisamy)",
+              "role": "Supporting / Father",
+              "description": "Sakthi's patriarchal, traditional father from Madurai who controlled his household and wife.",
+              "presence": "15%",
+              "dialogue": "10%",
+              "arc": "Weak",
+              "casting": "Medium",
+              "goal": "To marry off his daughter into a traditional setup and maintain social prestige.",
+              "motivation": "Adherence to traditional customs and parental authority.",
+              "conflict": "Clashes with Sakthi's modern, rebellious choices and estrangement.",
+              "transformation": "Humbled by the breakdown of his daughter's marriage and left helpless by her distance."
+            }
+          ]
+        }
+      },
+      "commercial": {
+        "generatedAt": "2026-08-11T15:11:55.000Z",
+        "data": {
+          "distributionPotentials": {
+            "theatrical": 75,
+            "ott": 85,
+            "panIndia": 50
+          },
+          "comparables": [
+            {
+              "name": "Oh My Kadavule (2020)",
+              "narrativeSimilarity": 78,
+              "audienceMatch": 86,
+              "costMatch": 82,
+              "marketFit": 88,
+              "context": "Tamil relationship reset comedy-drama with ego, marriage regret, and second-chance emotional payoff."
+            },
+            {
+              "name": "Love Today (2022)",
+              "narrativeSimilarity": 72,
+              "audienceMatch": 90,
+              "costMatch": 75,
+              "marketFit": 92,
+              "context": "Gen-Z / urban Tamil audience hit built on blunt relationship honesty, family pressure, and meme-friendly dialogue."
+            },
+            {
+              "name": "Raja Rani (2013)",
+              "narrativeSimilarity": 70,
+              "audienceMatch": 80,
+              "costMatch": 70,
+              "marketFit": 78,
+              "context": "Marriage, divorce trauma, and counselling-adjacent emotional architecture with dual-lead intensity."
+            },
+            {
+              "name": "Good Night (2023)",
+              "narrativeSimilarity": 65,
+              "audienceMatch": 84,
+              "costMatch": 88,
+              "marketFit": 85,
+              "context": "Light-budget urban Tamil relationship comedy with domestic quirks and multiplex youth pull."
+            }
+          ],
+          "marketingHooks": [
+            {
+              "title": "Gen-Z Marriage vs. Traditional Expectations",
+              "description": "Explores the humorous and bitter clashes between modern individualistic ideals ('its my choice') and traditional familial/societal expectations."
+            },
+            {
+              "title": "Courtroom Comedy Meets Modern Relationships",
+              "description": "The juxtaposition of absurd legal arguments, matrimonial disputes, and counselling sessions involving internet trends, memes, and social media."
+            },
+            {
+              "title": "Black Sheep / Gen-Z Branding",
+              "description": "Lean into Black Sheep Production youth identity and ‘ஆண் பாவம்’ provocation as a conversation-starting title campaign."
+            }
+          ],
+          "viralMoments": [
+            {
+              "title": "The Thali & Mangalsutra Debates",
+              "description": "Humorous and intense arguments over why the wife removed her thaali and how celebrity couple trends influence everyday marital fights."
+            },
+            {
+              "title": "Social Media vs. Reality Couple Reels",
+              "description": "The satirical take on Instagram influencer couples creating fake romantic reels while bickering behind the scenes."
+            },
+            {
+              "title": "Corn Flakes vs Coffee Cold Open",
+              "description": "Opening LED-TV philosophical spat is a ready-made teaser hook and meme template."
+            }
+          ],
+          "audienceMetrics": {
+            "primaryAudience": "Urban youth and young married couples",
+            "primaryMarket": "Tamil Nadu / Chennai urban centers",
+            "secondaryMarket": "Overseas Tamil diaspora and digital streaming audiences",
+            "metrics": [
+              {
+                "name": "Youth Appeal",
+                "score": 90
+              },
+              {
+                "name": "Family Audience",
+                "score": 70
+              },
+              {
+                "name": "Relatability",
+                "score": 85
+              }
+            ]
+          }
+        }
+      },
+      "production": {
+        "generatedAt": "2026-08-11T15:11:55.000Z",
+        "data": {
+          "productionSummary": {
+            "shootDays": 45,
+            "locations": 12,
+            "nightScenes": 10,
+            "actionSequences": 2,
+            "majorCharacters": 6,
+            "extras": 150,
+            "vfxScenes": 5,
+            "songs": 3
+          },
+          "attributes": {
+            "pages": 92,
+            "runtimeMinutes": 110,
+            "shootDays": 45,
+            "locations": 12,
+            "nightScenes": 10,
+            "actionSequences": 2,
+            "majorCast": 6,
+            "vfxScenes": 5,
+            "extras": 150,
+            "songs": 3
+          },
+          "locationsList": [
+            {
+              "name": "Siva and Sakthi Flat (Hall, Bedroom, Balcony, Kitchen)",
+              "scenes": 35,
+              "shootDays": 15,
+              "complexity": "Medium",
+              "type": "Indoor / Set"
+            },
+            {
+              "name": "Saidapet Family Welfare Court / Court Complex",
+              "scenes": 15,
+              "shootDays": 8,
+              "complexity": "High",
+              "type": "Indoor/Outdoor"
+            },
+            {
+              "name": "Womens Police Station",
+              "scenes": 6,
+              "shootDays": 4,
+              "complexity": "Medium",
+              "type": "Indoor"
+            },
+            {
+              "name": "Marriage Hall (Madurai)",
+              "scenes": 4,
+              "shootDays": 3,
+              "complexity": "High",
+              "type": "Indoor / Crowd"
+            },
+            {
+              "name": "Tasmac Bar",
+              "scenes": 3,
+              "shootDays": 2,
+              "complexity": "Low",
+              "type": "Indoor"
+            },
+            {
+              "name": "Beach",
+              "scenes": 4,
+              "shootDays": 3,
+              "complexity": "Medium",
+              "type": "Outdoor"
+            },
+            {
+              "name": "Boutique",
+              "scenes": 3,
+              "shootDays": 2,
+              "complexity": "Medium",
+              "type": "Indoor"
+            },
+            {
+              "name": "Lakshmi Home",
+              "scenes": 5,
+              "shootDays": 3,
+              "complexity": "Low",
+              "type": "Indoor"
+            },
+            {
+              "name": "Register Office",
+              "scenes": 2,
+              "shootDays": 1,
+              "complexity": "Low",
+              "type": "Indoor"
+            },
+            {
+              "name": "Hospital",
+              "scenes": 2,
+              "shootDays": 1,
+              "complexity": "Low",
+              "type": "Indoor"
+            },
+            {
+              "name": "Narayanan Office",
+              "scenes": 3,
+              "shootDays": 2,
+              "complexity": "Low",
+              "type": "Indoor"
+            },
+            {
+              "name": "Streets / Roads / Transit / Coffee Shop / Josiyar House",
+              "scenes": 8,
+              "shootDays": 4,
+              "complexity": "Low",
+              "type": "Outdoor"
+            }
+          ],
+          "castPlanning": [
+            {
+              "character": "Siva (Hero)",
+              "starDependency": "High",
+              "performance": "Demands strong comic timing, emotional vulnerability, and dramatic range.",
+              "shootDays": 40
+            },
+            {
+              "character": "Sakthi (Heroine)",
+              "starDependency": "High",
+              "performance": "Requires contemporary, independent persona blending stubbornness with emotional depth.",
+              "shootDays": 38
+            },
+            {
+              "character": "Narayanan (Lawyer)",
+              "starDependency": "Medium",
+              "performance": "Key satirical and comedic lawyer role driving court sequences.",
+              "shootDays": 20
+            },
+            {
+              "character": "Lakshmi (Female Lawyer / Mentor figure)",
+              "starDependency": "Medium",
+              "performance": "Feminist lawyer character with stern demeanour and hidden past.",
+              "shootDays": 18
+            },
+            {
+              "character": "Sithu (Friend / Junior Lawyer)",
+              "starDependency": "Low",
+              "performance": "Comedic support and sidekick.",
+              "shootDays": 15
+            },
+            {
+              "character": "Palanisamy (Father)",
+              "starDependency": "Low",
+              "performance": "Traditional patriarchal father figure with humorous rural reactions.",
+              "shootDays": 8
+            }
+          ],
+          "budgetBreakdown": [
+            {
+              "category": "Cast & Remunerations",
+              "min": 4.0,
+              "max": 6.0,
+              "confidence": "Medium"
+            },
+            {
+              "category": "Production Crew & Technical",
+              "min": 2.5,
+              "max": 3.5,
+              "confidence": "High"
+            },
+            {
+              "category": "Locations & Sets (Court, Flat, Police)",
+              "min": 2.0,
+              "max": 3.0,
+              "confidence": "Medium"
+            },
+            {
+              "category": "Post-Production (Edit, Sound, BGM, Light VFX)",
+              "min": 1.0,
+              "max": 1.5,
+              "confidence": "High"
+            },
+            {
+              "category": "Marketing & Publicity",
+              "min": 1.0,
+              "max": 1.5,
+              "confidence": "Low"
+            }
+          ],
+          "budgetInfo": {
+            "min": 10.5,
+            "max": 15.5,
+            "currency": "INR Cr",
+            "confidence": "Medium",
+            "costDrivers": [
+              {
+                "name": "Multiple locations & Court sets",
+                "severity": "High",
+                "explanation": "Frequent transitions between high-crowd courtrooms, police stations, and residential flats require extensive set rentals and crowd management."
+              },
+              {
+                "name": "Ensemble Cast & Supporting Actors",
+                "severity": "Medium",
+                "explanation": "Multiple recurring secondary characters (lawyers, friends, family members, matchmakers) across various montage sequences increase daily talent overheads."
+              },
+              {
+                "name": "Montage & VFX elements",
+                "severity": "Low",
+                "explanation": "Split screens, social media interface integrations, and flashback/intercut sequences require dedicated post-production digital asset creation."
+              }
+            ]
+          }
+        }
+      },
+      "development": {
+        "generatedAt": "2026-08-11T15:11:55.000Z",
+        "data": {
+          "rewriteNotes": [
+            {
+              "priority": "CRITICAL",
+              "target": "Scenes 8–33",
+              "title": "Streamline courtroom and counselling exposition",
+              "summary": "Legal monologues on 498A/maintenance and repeated hearing beats slow comic pacing.",
+              "before": "Long bench arguments and lawyer explainers between Siva and Narayanan.",
+              "action": "Trim statute lectures; keep only beats that change power between Siva, Sakthi, Lakshmi, and Narayanan."
+            },
+            {
+              "priority": "RECOMMENDED",
+              "target": "Scenes 47–50",
+              "title": "Sharpen counselling as character turning point",
+              "summary": "Counselling currently shares space with legal exposition.",
+              "before": "Counsellor scenes blend into court logistics.",
+              "action": "Make counselling the emotional midpoint mirror — ego named, trauma named, then cut hard back to court strategy."
+            }
+          ],
+          "developmentNotes": [
+            {
+              "priority": "CRITICAL",
+              "title": "Compress repetitive court hearing cycles",
+              "description": "Scenes across Saidapet court (roughly Scenes 8–33 and later returns) revisit similar maintenance/ego arguments and risk Act 2 fatigue.",
+              "scene": "Scenes 8–33 / Pages 35–55",
+              "before": "Multiple nearly identical hearing/counselling intercuts with overlapping grievances.",
+              "actionable": "Keep 3 landmark hearings (filing, police escalation, final mutual chance) and fold the rest into a time-lapse montage song."
+            },
+            {
+              "priority": "RECOMMENDED",
+              "title": "Seed Narayanan’s personal subplot earlier",
+              "description": "Narayanan’s estranged-family beat lands late; earlier breadcrumbs would deepen the lawyer duel.",
+              "scene": "Scenes 45–60",
+              "before": "Surprise child/video-call reveal without prior setup.",
+              "actionable": "Add a waiting-room phone hint or photo beat in early court sequences so the late call pays off."
+            },
+            {
+              "priority": "OPTIONAL",
+              "title": "Clarify Sakthi’s father trauma through one sharp flashback",
+              "description": "Palanisamy’s patriarchal control motivates Sakthi, but the wound can read as exposition-heavy.",
+              "scene": "Sakthi-home / Madurai marriage hall blocks",
+              "before": "Dialogue-led references to childhood control.",
+              "actionable": "One 20–30s visual flashback tied to a present fight trigger (thaali / household order / permission)."
+            }
+          ],
+          "draftComparison": [
+            {
+              "aspect": "Tone and Pacing",
+              "current": "Fast Gen-Z wedding satire shifts into dense courtroom procedural with many recurring hearings.",
+              "proposed": "Hold satirical edge through litigation via absurd legal arguments + montage compression; protect emotional climax for final hearing.",
+              "impact": "Stronger comedy-drama consistency for theatrical word-of-mouth."
+            },
+            {
+              "aspect": "Point of View Balance",
+              "current": "Script critiques both performative feminism and male entitlement, but some stretches risk reading as one-sided.",
+              "proposed": "Pair every Sakthi excess beat with a Siva entitlement beat (and vice versa) inside the same sequence.",
+              "impact": "Reduces polarization risk while keeping debate energy."
+            }
+          ]
+        }
+      },
+      "greenlight": {
+        "generatedAt": "2026-08-11T15:11:55.000Z",
+        "data": {
+          "recommendation": {
+            "status": "DEVELOP",
+            "score": 68,
+            "confidence": "Medium",
+            "summary": "A contemporary relationship satire exploring modern gender dynamics, social media obsession, and legal battles surrounding marriage. While it features strong commercial potential for Tamil cinema, the pacing and repetitive marital conflicts need refinement."
+          },
+          "whyItWorks": [
+            "Topical Kollywood comedy-drama about Gen-Z marriage, social-media performance, and Family Welfare Court realities.",
+            "Dual-lead plus rival-lawyer ensemble (Siva/Sakthi + Narayanan/Lakshmi) creates commercial conflict architecture.",
+            "Urban Tamil + diaspora OTT fit with memeable dialogue and low-to-mid VFX production profile."
+          ],
+          "killRisks": [
+            {
+              "title": "Repetitive courtroom Act 2",
+              "severity": "High",
+              "summary": "Too many similar hearings/montages can dull multiplex energy before the reconciliation turn."
+            },
+            {
+              "title": "Polarizing gender discourse",
+              "severity": "High",
+              "summary": "Feminism, 498A, and marital ego themes can split audience camps and invite outrage marketing that overpowers the story."
+            },
+            {
+              "title": "Tone whiplash",
+              "severity": "Medium",
+              "summary": "Jumping from reel satire to domestic-violence litigation without clear gear-shifts may confuse mainstream comedy buyers."
+            }
+          ],
+          "nextSteps": [
+            {
+              "step": "Condense court/police cycles into 3 tentpoles + montage",
+              "owner": "Writer / Director",
+              "timing": "Immediate"
+            },
+            {
+              "step": "Attach dual leads comfortable with urban comedy + courtroom intensity",
+              "owner": "Producer / Casting",
+              "timing": "Pre-production"
+            },
+            {
+              "step": "Lock Saidapet court / police / flat unit plan for 45 shoot days",
+              "owner": "Line Producer",
+              "timing": "Pre-production"
+            },
+            {
+              "step": "Sensitivity + legal pass on 498A / DV depiction",
+              "owner": "Producer / Legal",
+              "timing": "Pre-production"
+            }
+          ]
+        }
+      }
+    },
+    "recommendation": {
+      "status": "DEVELOP",
+      "score": 68,
+      "confidence": "Medium",
+      "summary": "A contemporary relationship satire exploring modern gender dynamics, social media obsession, and legal battles surrounding marriage. While it features strong commercial potential for Tamil cinema, the pacing and repetitive marital conflicts need refinement."
+    },
+    "scores": {
+      "story": 70,
+      "commercial": 75,
+      "production": 65,
+      "audience": 72,
+      "originality": 78,
+      "risk": 55
+    },
+    "logline": "An arranged-cum-love marriage deteriorates into a bitter legal battle when clashing ideals of modern independence, social media validation, and traditional roles tear a young couple apart.",
+    "synopsis": "Siva and Sakthi enter into a modern arranged marriage that initially appears ideal. However, underlying tensions quickly emerge as Sakthi, influenced heavily by social media trends and radical feminist viewpoints, constantly clashes with Siva over household duties, financial independence, and personal boundaries. Their relationship disintegrates amidst constant arguments, public social media shaming, and irreconcilable ideological differences.\n\nThe couple eventually reaches the Family Welfare Court, advised by cunning lawyers like Narayanan and Lakshmi. What starts as petty marital disputes escalates into complex legal warfare involving domestic violence accusations, false claims, and societal judgment. As both families get dragged into the messy litigation, Siva and Sakthi experience the harsh realities of legal battles and separation.\n\nAfter months of painful court proceedings, mutual realizations, and witnessing the misery of prolonged legal separation, both Siva and Sakthi begin to understand the compromises required in a relationship. In a climactic turnaround during their final hearing, Sakthi drops her divorce plea, signaling a tentative step toward reconciliation.",
+    "attributes": {
+      "pages": 92,
+      "runtimeMinutes": 110,
+      "shootDays": 45,
+      "locations": 12,
+      "nightScenes": 10,
+      "actionSequences": 2,
+      "majorCast": 6,
+      "vfxScenes": 5,
+      "extras": 150,
+      "songs": 3
+    },
+    "risks": [
+      {
+        "title": "Gender Dynamics Sensitivity",
+        "severity": "High",
+        "summary": "The film deals heavily with modern feminism, marital disputes, and legal system biases, which could invite polarizing audience reactions and censorship scrutiny.",
+        "evidence": "Extensive courtroom arguments and recurring domestic conflicts debating gender roles and legal provisions like 498A."
+      },
+      {
+        "title": "Repetitive Narrative Beats",
+        "severity": "Medium",
+        "summary": "The second act features numerous recurring arguments over social media reels, household chores, and court dates that could slow down the narrative pace.",
+        "evidence": "Multiple montage sequences and repeated court hearing scenes covering similar interpersonal grievances."
+      }
+    ],
+    "opportunities": [
+      {
+        "title": "Relatable Contemporary Themes",
+        "summary": "Appeals strongly to urban and youth demographics by incorporating social media culture, Instagram trends, and modern relationship anxieties."
+      },
+      {
+        "title": "Strong Comedy-Drama Blend",
+        "summary": "Balances heavy courtroom drama with witty situational humor and satirical commentary, fitting well into the Kollywood commercial comedy-drama space."
+      }
+    ],
+    "storyScorecard": {
+      "structuralPacing": "Fair",
+      "structuralPacingNotes": "Courtship and early marriage move briskly; Act 2 court-hearing cycles (Saidapet Family Welfare Court through repeated hearing montages) become repetitive before the final reconciliation.",
+      "climaxBuild": "Good",
+      "climaxBuildNotes": "Legal warfare and ego collisions escalate into an emotional last-chance hearing where Sakthi withdraws the divorce demand and both face the cost of prolonged separation."
+    },
+    "timelineEvents": [
+      {
+        "title": "Title Tease — Corn Flakes vs Coffee",
+        "description": "Opening cold open: Siva–Sakthi flat LED TV debate over who runs the world, cutting to Black Sheep titles.",
+        "page": 1,
+        "tension": 35
+      },
+      {
+        "title": "Matchmaking & Social Vetting",
+        "description": "Palanisamy brokers Sakthi’s match; friends reverse-image-search Siva’s profiles across FB/Insta/Twitter.",
+        "page": 3,
+        "tension": 30
+      },
+      {
+        "title": "Hero Intro Montage",
+        "description": "Siva introduced through Josiyar house, coffee shop, theater, and temple social-media montage.",
+        "page": 5,
+        "tension": 40
+      },
+      {
+        "title": "Wedding & Honeymoon High",
+        "description": "Marriage hall celebration followed by montage song as the couple settles into modern married life.",
+        "page": 12,
+        "tension": 45
+      },
+      {
+        "title": "Domestic Fault Lines",
+        "description": "Household chores, thaali/lifestyle debates, and Instagram-couple performativity spark escalating fights.",
+        "page": 18,
+        "tension": 62
+      },
+      {
+        "title": "Fight Montage / Interval Setup",
+        "description": "Day/night fight montage song and boutique/court intercuts push the marriage toward legal action.",
+        "page": 28,
+        "tension": 78
+      },
+      {
+        "title": "Family Welfare Court Filed",
+        "description": "Saidapet Family Welfare Court and counselling track begins; lawyers enter the arena.",
+        "page": 35,
+        "tension": 82
+      },
+      {
+        "title": "Police & 498A Pressure",
+        "description": "Women’s police station and remand threat sequences raise stakes beyond a civil dispute.",
+        "page": 48,
+        "tension": 90
+      },
+      {
+        "title": "Rival Lawyers — Narayanan vs Lakshmi",
+        "description": "Cynical divorce counsel Narayanan clashes with feminist counsel Lakshmi; compromises and ego battles dominate.",
+        "page": 55,
+        "tension": 88
+      },
+      {
+        "title": "Counselling & Ego Mirror",
+        "description": "Counselling room and side characters force both leads to confront ego, trauma, and performative feminism vs entitlement.",
+        "page": 70,
+        "tension": 75
+      },
+      {
+        "title": "Final Hearing / Withdrawal",
+        "description": "Judge presses mutual settlement; Sakthi drops divorce demand; Siva withdraws conjugal-rights claim — tentative reconciliation.",
+        "page": 85,
+        "tension": 55
+      },
+      {
+        "title": "Return to the Flat",
+        "description": "Closing returns to the Siva–Sakthi flat — unresolved but hopeful, echoing the opening debate.",
+        "page": 92,
+        "tension": 40
+      }
+    ],
+    "cinemaEvaluation": {
+      "heroIntro": "Good",
+      "heroIntroDesc": "Siva is introduced via Gen-Z social-media reverse search and lifestyle montage rather than a conventional mass entry.",
+      "intervalCliffhanger": "Good",
+      "intervalCliffhangerDesc": "Marriage collapse + fight montage lands the couple at Saidapet Family Welfare Court, flipping romance into litigation.",
+      "climaxEmotionalPayoff": "Good",
+      "climaxEmotionalPayoffDesc": "Final hearing forces ego surrender: divorce withdrawn, settlement paused, relationship tentatively restarted.",
+      "massMoments": "Fair",
+      "massMomentsDesc": "Whistle moments are satirical courtroom zingers and social-media call-outs rather than action set pieces.",
+      "songsIntegration": "Good",
+      "songsIntegrationDesc": "Three montage songs (romance, fight, time-lapse court/life) compress relationship arcs without full song-and-dance interruptions."
+    },
+    "indianCinemaSignals": [
+      {
+        "name": "Hero Introduction Block",
+        "rating": "Good",
+        "explanation": "Siva is introduced via Gen-Z social-media reverse search and lifestyle montage rather than a conventional mass entry."
+      },
+      {
+        "name": "Interval Cliffhanger",
+        "rating": "Good",
+        "explanation": "Marriage collapse + fight montage lands the couple at Saidapet Family Welfare Court, flipping romance into litigation."
+      },
+      {
+        "name": "Climax Emotional Payoff",
+        "rating": "Good",
+        "explanation": "Final hearing forces ego surrender: divorce withdrawn, settlement paused, relationship tentatively restarted."
+      },
+      {
+        "name": "Mass Moments",
+        "rating": "Fair",
+        "explanation": "Whistle moments are satirical courtroom zingers and social-media call-outs rather than action set pieces."
+      },
+      {
+        "name": "Songs Integration",
+        "rating": "Good",
+        "explanation": "Three montage songs (romance, fight, time-lapse court/life) compress relationship arcs without full song-and-dance interruptions."
+      },
+      {
+        "name": "Family Court Drama",
+        "rating": "Excellent",
+        "explanation": "Saidapet Family Welfare Court, counselling, maintenance, and mutual-consent divorce mechanics are central to Act 2–3."
+      },
+      {
+        "name": "Social Media Satire",
+        "rating": "Excellent",
+        "explanation": "Influencer couple reels, DP culture, and public digital shaming drive conflict as much as domestic chores."
+      }
+    ],
+    "tensionCurve": [
+      {
+        "label": "Cold Open",
+        "tension": 35
+      },
+      {
+        "label": "Matchmaking",
+        "tension": 30
+      },
+      {
+        "label": "Wedding",
+        "tension": 45
+      },
+      {
+        "label": "Domestic Wars",
+        "tension": 65
+      },
+      {
+        "label": "Court Filed",
+        "tension": 82
+      },
+      {
+        "label": "Police Heat",
+        "tension": 92
+      },
+      {
+        "label": "Lawyer Duel",
+        "tension": 88
+      },
+      {
+        "label": "Ego Mirror",
+        "tension": 72
+      },
+      {
+        "label": "Final Hearing",
+        "tension": 55
+      },
+      {
+        "label": "Flat Return",
+        "tension": 40
+      }
+    ],
+    "charactersList": [
+      {
+        "name": "சிவா (Siva)",
+        "role": "Lead / Husband",
+        "description": "An IT professional who marries Sakthi through an arranged-cum-love match, expecting a traditional and submissive partner, but struggles as she asserts her independence.",
+        "presence": "90%",
+        "dialogue": "45%",
+        "arc": "Exceptional",
+        "casting": "Critical",
+        "goal": "To maintain a comfortable, traditional marriage and resolve conflicts with his wife.",
+        "motivation": "Desire for peace, domestic harmony, and a predictable lifestyle.",
+        "conflict": "Clashes constantly with Sakthi over independence, division of household labor, social media culture, and personal choices.",
+        "transformation": "Evolves from an entitled and frustrated husband into a self-aware, remorseful partner willing to fight for his marriage and make mutual concessions."
+      },
+      {
+        "name": "சக்தி (Sakthi)",
+        "role": "Lead / Wife",
+        "description": "An independent, modern Gen Z woman with a feminist outlook who marries Siva, deeply affected by her traumatic past with her father.",
+        "presence": "90%",
+        "dialogue": "45%",
+        "arc": "Exceptional",
+        "casting": "Critical",
+        "goal": "To live life strictly on her own terms ('its my choice') without patriarchal control.",
+        "motivation": "Escaping generational patriarchal trauma and asserting absolute personal freedom and equality.",
+        "conflict": "Fights against Siva's expectations of traditional wifely duties and societal pressures from elders.",
+        "transformation": "Moves from rigid, defensive individualism to realizing the emotional toll of isolation, ultimately choosing to reconcile with Siva."
+      },
+      {
+        "name": "நாராயணன் (Narayanan)",
+        "role": "Supporting / Lawyer",
+        "description": "Siva's cynical, street-smart divorce lawyer who handles matrimonial disputes with dark humor and cynical pragmatism.",
+        "presence": "40%",
+        "dialogue": "25%",
+        "arc": "Moderate",
+        "casting": "High",
+        "goal": "To successfully navigate legal hurdles in Siva's divorce case while dealing with his own past.",
+        "motivation": "Professional duty blended with personal cynicism regarding modern relationships.",
+        "conflict": "Opposes Lakshmi in court while managing his own estranged relationship with his family.",
+        "transformation": "Gains emotional vulnerability upon hearing news of his own child through a phone call."
+      },
+      {
+        "name": "லட்சுமி (Lakshmi)",
+        "role": "Supporting / Lawyer",
+        "description": "Sakthi's fierce, uncompromising feminist lawyer who is an ex-wife with a bitter personal history regarding men and marriage.",
+        "presence": "35%",
+        "dialogue": "20%",
+        "arc": "Moderate",
+        "casting": "High",
+        "goal": "To win Sakthi's contested divorce and secure maximum legal and financial leverage.",
+        "motivation": "Radical feminist ideology fueled by personal trauma and a desire to dismantle patriarchal norms.",
+        "conflict": "Engages in intense courtroom and ideological battles against Narayanan and traditional family structures.",
+        "transformation": "Maintains her hardline stance throughout, though slightly challenged by Bharathi's perspective."
+      },
+      {
+        "name": "சித்து (Sithu)",
+        "role": "Supporting / Friend & Junior Lawyer",
+        "description": "Narayanan's associate and friend who assists Siva and Narayanan throughout the legal battle.",
+        "presence": "25%",
+        "dialogue": "15%",
+        "arc": "Weak",
+        "casting": "Medium",
+        "goal": "To assist Narayanan in legal proceedings and support Siva.",
+        "motivation": "Professional loyalty and camaraderie.",
+        "conflict": "Deals with the chaotic courtroom environment and police station standoffs.",
+        "transformation": "Remains a steady comedic and supportive sidekick."
+      },
+      {
+        "name": "பழனிசாமி (Palanisamy)",
+        "role": "Supporting / Father",
+        "description": "Sakthi's patriarchal, traditional father from Madurai who controlled his household and wife.",
+        "presence": "15%",
+        "dialogue": "10%",
+        "arc": "Weak",
+        "casting": "Medium",
+        "goal": "To marry off his daughter into a traditional setup and maintain social prestige.",
+        "motivation": "Adherence to traditional customs and parental authority.",
+        "conflict": "Clashes with Sakthi's modern, rebellious choices and estrangement.",
+        "transformation": "Humbled by the breakdown of his daughter's marriage and left helpless by her distance."
+      }
+    ],
+    "distributionPotentials": {
+      "theatrical": 75,
+      "ott": 85,
+      "panIndia": 50
+    },
+    "comparables": [
+      {
+        "name": "Oh My Kadavule (2020)",
+        "narrativeSimilarity": 78,
+        "audienceMatch": 86,
+        "costMatch": 82,
+        "marketFit": 88,
+        "context": "Tamil relationship reset comedy-drama with ego, marriage regret, and second-chance emotional payoff."
+      },
+      {
+        "name": "Love Today (2022)",
+        "narrativeSimilarity": 72,
+        "audienceMatch": 90,
+        "costMatch": 75,
+        "marketFit": 92,
+        "context": "Gen-Z / urban Tamil audience hit built on blunt relationship honesty, family pressure, and meme-friendly dialogue."
+      },
+      {
+        "name": "Raja Rani (2013)",
+        "narrativeSimilarity": 70,
+        "audienceMatch": 80,
+        "costMatch": 70,
+        "marketFit": 78,
+        "context": "Marriage, divorce trauma, and counselling-adjacent emotional architecture with dual-lead intensity."
+      },
+      {
+        "name": "Good Night (2023)",
+        "narrativeSimilarity": 65,
+        "audienceMatch": 84,
+        "costMatch": 88,
+        "marketFit": 85,
+        "context": "Light-budget urban Tamil relationship comedy with domestic quirks and multiplex youth pull."
+      }
+    ],
+    "marketingHooks": [
+      {
+        "title": "Gen-Z Marriage vs. Traditional Expectations",
+        "description": "Explores the humorous and bitter clashes between modern individualistic ideals ('its my choice') and traditional familial/societal expectations."
+      },
+      {
+        "title": "Courtroom Comedy Meets Modern Relationships",
+        "description": "The juxtaposition of absurd legal arguments, matrimonial disputes, and counselling sessions involving internet trends, memes, and social media."
+      },
+      {
+        "title": "Black Sheep / Gen-Z Branding",
+        "description": "Lean into Black Sheep Production youth identity and ‘ஆண் பாவம்’ provocation as a conversation-starting title campaign."
+      }
+    ],
+    "viralMoments": [
+      {
+        "title": "The Thali & Mangalsutra Debates",
+        "description": "Humorous and intense arguments over why the wife removed her thaali and how celebrity couple trends influence everyday marital fights."
+      },
+      {
+        "title": "Social Media vs. Reality Couple Reels",
+        "description": "The satirical take on Instagram influencer couples creating fake romantic reels while bickering behind the scenes."
+      },
+      {
+        "title": "Corn Flakes vs Coffee Cold Open",
+        "description": "Opening LED-TV philosophical spat is a ready-made teaser hook and meme template."
+      }
+    ],
+    "audienceMetrics": {
+      "primaryAudience": "Urban youth and young married couples",
+      "primaryMarket": "Tamil Nadu / Chennai urban centers",
+      "secondaryMarket": "Overseas Tamil diaspora and digital streaming audiences",
+      "metrics": [
+        {
+          "name": "Youth Appeal",
+          "score": 90
+        },
+        {
+          "name": "Family Audience",
+          "score": 70
+        },
+        {
+          "name": "Relatability",
+          "score": 85
+        }
+      ]
+    },
+    "productionSummary": {
+      "shootDays": 45,
+      "locations": 12,
+      "nightScenes": 10,
+      "actionSequences": 2,
+      "majorCharacters": 6,
+      "extras": 150,
+      "vfxScenes": 5,
+      "songs": 3
+    },
+    "locationsList": [
+      {
+        "name": "Siva and Sakthi Flat (Hall, Bedroom, Balcony, Kitchen)",
+        "scenes": 35,
+        "shootDays": 15,
+        "complexity": "Medium",
+        "type": "Indoor / Set"
+      },
+      {
+        "name": "Saidapet Family Welfare Court / Court Complex",
+        "scenes": 15,
+        "shootDays": 8,
+        "complexity": "High",
+        "type": "Indoor/Outdoor"
+      },
+      {
+        "name": "Womens Police Station",
+        "scenes": 6,
+        "shootDays": 4,
+        "complexity": "Medium",
+        "type": "Indoor"
+      },
+      {
+        "name": "Marriage Hall (Madurai)",
+        "scenes": 4,
+        "shootDays": 3,
+        "complexity": "High",
+        "type": "Indoor / Crowd"
+      },
+      {
+        "name": "Tasmac Bar",
+        "scenes": 3,
+        "shootDays": 2,
+        "complexity": "Low",
+        "type": "Indoor"
+      },
+      {
+        "name": "Beach",
+        "scenes": 4,
+        "shootDays": 3,
+        "complexity": "Medium",
+        "type": "Outdoor"
+      },
+      {
+        "name": "Boutique",
+        "scenes": 3,
+        "shootDays": 2,
+        "complexity": "Medium",
+        "type": "Indoor"
+      },
+      {
+        "name": "Lakshmi Home",
+        "scenes": 5,
+        "shootDays": 3,
+        "complexity": "Low",
+        "type": "Indoor"
+      },
+      {
+        "name": "Register Office",
+        "scenes": 2,
+        "shootDays": 1,
+        "complexity": "Low",
+        "type": "Indoor"
+      },
+      {
+        "name": "Hospital",
+        "scenes": 2,
+        "shootDays": 1,
+        "complexity": "Low",
+        "type": "Indoor"
+      },
+      {
+        "name": "Narayanan Office",
+        "scenes": 3,
+        "shootDays": 2,
+        "complexity": "Low",
+        "type": "Indoor"
+      },
+      {
+        "name": "Streets / Roads / Transit / Coffee Shop / Josiyar House",
+        "scenes": 8,
+        "shootDays": 4,
+        "complexity": "Low",
+        "type": "Outdoor"
+      }
+    ],
+    "castPlanning": [
+      {
+        "character": "Siva (Hero)",
+        "starDependency": "High",
+        "performance": "Demands strong comic timing, emotional vulnerability, and dramatic range.",
+        "shootDays": 40
+      },
+      {
+        "character": "Sakthi (Heroine)",
+        "starDependency": "High",
+        "performance": "Requires contemporary, independent persona blending stubbornness with emotional depth.",
+        "shootDays": 38
+      },
+      {
+        "character": "Narayanan (Lawyer)",
+        "starDependency": "Medium",
+        "performance": "Key satirical and comedic lawyer role driving court sequences.",
+        "shootDays": 20
+      },
+      {
+        "character": "Lakshmi (Female Lawyer / Mentor figure)",
+        "starDependency": "Medium",
+        "performance": "Feminist lawyer character with stern demeanour and hidden past.",
+        "shootDays": 18
+      },
+      {
+        "character": "Sithu (Friend / Junior Lawyer)",
+        "starDependency": "Low",
+        "performance": "Comedic support and sidekick.",
+        "shootDays": 15
+      },
+      {
+        "character": "Palanisamy (Father)",
+        "starDependency": "Low",
+        "performance": "Traditional patriarchal father figure with humorous rural reactions.",
+        "shootDays": 8
+      }
+    ],
+    "budgetBreakdown": [
+      {
+        "category": "Cast & Remunerations",
+        "min": 4.0,
+        "max": 6.0,
+        "confidence": "Medium"
+      },
+      {
+        "category": "Production Crew & Technical",
+        "min": 2.5,
+        "max": 3.5,
+        "confidence": "High"
+      },
+      {
+        "category": "Locations & Sets (Court, Flat, Police)",
+        "min": 2.0,
+        "max": 3.0,
+        "confidence": "Medium"
+      },
+      {
+        "category": "Post-Production (Edit, Sound, BGM, Light VFX)",
+        "min": 1.0,
+        "max": 1.5,
+        "confidence": "High"
+      },
+      {
+        "category": "Marketing & Publicity",
+        "min": 1.0,
+        "max": 1.5,
+        "confidence": "Low"
+      }
+    ],
+    "budgetInfo": {
+      "min": 10.5,
+      "max": 15.5,
+      "currency": "INR Cr",
+      "confidence": "Medium",
+      "costDrivers": [
+        {
+          "name": "Multiple locations & Court sets",
+          "severity": "High",
+          "explanation": "Frequent transitions between high-crowd courtrooms, police stations, and residential flats require extensive set rentals and crowd management."
+        },
+        {
+          "name": "Ensemble Cast & Supporting Actors",
+          "severity": "Medium",
+          "explanation": "Multiple recurring secondary characters (lawyers, friends, family members, matchmakers) across various montage sequences increase daily talent overheads."
+        },
+        {
+          "name": "Montage & VFX elements",
+          "severity": "Low",
+          "explanation": "Split screens, social media interface integrations, and flashback/intercut sequences require dedicated post-production digital asset creation."
+        }
+      ]
+    },
+    "rewriteNotes": [
+      {
+        "priority": "CRITICAL",
+        "target": "Scenes 8–33",
+        "title": "Streamline courtroom and counselling exposition",
+        "summary": "Legal monologues on 498A/maintenance and repeated hearing beats slow comic pacing.",
+        "before": "Long bench arguments and lawyer explainers between Siva and Narayanan.",
+        "action": "Trim statute lectures; keep only beats that change power between Siva, Sakthi, Lakshmi, and Narayanan."
+      },
+      {
+        "priority": "RECOMMENDED",
+        "target": "Scenes 47–50",
+        "title": "Sharpen counselling as character turning point",
+        "summary": "Counselling currently shares space with legal exposition.",
+        "before": "Counsellor scenes blend into court logistics.",
+        "action": "Make counselling the emotional midpoint mirror — ego named, trauma named, then cut hard back to court strategy."
+      }
+    ],
+    "developmentNotes": [
+      {
+        "priority": "CRITICAL",
+        "title": "Compress repetitive court hearing cycles",
+        "description": "Scenes across Saidapet court (roughly Scenes 8–33 and later returns) revisit similar maintenance/ego arguments and risk Act 2 fatigue.",
+        "scene": "Scenes 8–33 / Pages 35–55",
+        "before": "Multiple nearly identical hearing/counselling intercuts with overlapping grievances.",
+        "actionable": "Keep 3 landmark hearings (filing, police escalation, final mutual chance) and fold the rest into a time-lapse montage song."
+      },
+      {
+        "priority": "RECOMMENDED",
+        "title": "Seed Narayanan’s personal subplot earlier",
+        "description": "Narayanan’s estranged-family beat lands late; earlier breadcrumbs would deepen the lawyer duel.",
+        "scene": "Scenes 45–60",
+        "before": "Surprise child/video-call reveal without prior setup.",
+        "actionable": "Add a waiting-room phone hint or photo beat in early court sequences so the late call pays off."
+      },
+      {
+        "priority": "OPTIONAL",
+        "title": "Clarify Sakthi’s father trauma through one sharp flashback",
+        "description": "Palanisamy’s patriarchal control motivates Sakthi, but the wound can read as exposition-heavy.",
+        "scene": "Sakthi-home / Madurai marriage hall blocks",
+        "before": "Dialogue-led references to childhood control.",
+        "actionable": "One 20–30s visual flashback tied to a present fight trigger (thaali / household order / permission)."
+      }
+    ],
+    "draftComparison": [
+      {
+        "aspect": "Tone and Pacing",
+        "current": "Fast Gen-Z wedding satire shifts into dense courtroom procedural with many recurring hearings.",
+        "proposed": "Hold satirical edge through litigation via absurd legal arguments + montage compression; protect emotional climax for final hearing.",
+        "impact": "Stronger comedy-drama consistency for theatrical word-of-mouth."
+      },
+      {
+        "aspect": "Point of View Balance",
+        "current": "Script critiques both performative feminism and male entitlement, but some stretches risk reading as one-sided.",
+        "proposed": "Pair every Sakthi excess beat with a Siva entitlement beat (and vice versa) inside the same sequence.",
+        "impact": "Reduces polarization risk while keeping debate energy."
+      }
+    ],
+    "whyItWorks": [
+      "Topical Kollywood comedy-drama about Gen-Z marriage, social-media performance, and Family Welfare Court realities.",
+      "Dual-lead plus rival-lawyer ensemble (Siva/Sakthi + Narayanan/Lakshmi) creates commercial conflict architecture.",
+      "Urban Tamil + diaspora OTT fit with memeable dialogue and low-to-mid VFX production profile."
+    ],
+    "killRisks": [
+      {
+        "title": "Repetitive courtroom Act 2",
+        "severity": "High",
+        "summary": "Too many similar hearings/montages can dull multiplex energy before the reconciliation turn."
+      },
+      {
+        "title": "Polarizing gender discourse",
+        "severity": "High",
+        "summary": "Feminism, 498A, and marital ego themes can split audience camps and invite outrage marketing that overpowers the story."
+      },
+      {
+        "title": "Tone whiplash",
+        "severity": "Medium",
+        "summary": "Jumping from reel satire to domestic-violence litigation without clear gear-shifts may confuse mainstream comedy buyers."
+      }
+    ],
+    "nextSteps": [
+      {
+        "step": "Condense court/police cycles into 3 tentpoles + montage",
+        "owner": "Writer / Director",
+        "timing": "Immediate"
+      },
+      {
+        "step": "Attach dual leads comfortable with urban comedy + courtroom intensity",
+        "owner": "Producer / Casting",
+        "timing": "Pre-production"
+      },
+      {
+        "step": "Lock Saidapet court / police / flat unit plan for 45 shoot days",
+        "owner": "Line Producer",
+        "timing": "Pre-production"
+      },
+      {
+        "step": "Sensitivity + legal pass on 498A / DV depiction",
+        "owner": "Producer / Legal",
+        "timing": "Pre-production"
+      }
+    ]
+  }
+}
