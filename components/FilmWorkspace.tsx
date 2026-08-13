@@ -326,7 +326,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
 
         const raw = await fetchSummarizeWorkflow(fileUrlRef.current!, prompt);
         
-        setAnalysisReport(prev => {
+        setAnalysisReport((prev: any) => {
           const next = { ...prev, ...((raw as any) || {}) };
           try {
             localStorage.setItem("temp_film_analysis", JSON.stringify(next));
@@ -649,7 +649,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
           }`}
         >
           <Sparkles className="w-4 h-4 text-[#75A5ED]" />
-          Ask Rover Chat
+          Ask AI
         </button>
       </div>
 
@@ -782,10 +782,10 @@ const FilmWorkspace = memo(function FilmWorkspace({
                         <span className="text-muted-foreground text-xs">Screenplay Pages</span>
                         <span className="text-foreground text-xs font-semibold">{metadata.pages} pages</span>
                       </div>
-                      <div className="flex justify-between py-1 border-b border-border/40">
+                      {/* <div className="flex justify-between py-1 border-b border-border/40">
                         <span className="text-muted-foreground text-xs">Est. Runtime</span>
                         <span className="text-foreground text-xs font-semibold">{metadata.runtimeMinutes} minutes</span>
-                      </div>
+                      </div> */}
                       <div className="flex justify-between py-1 border-b border-border/40">
                         <span className="text-muted-foreground text-xs">Primary Market</span>
                         <span className="text-foreground text-xs font-semibold">{metadata.targetMarket}</span>
@@ -1617,7 +1617,14 @@ const FilmWorkspace = memo(function FilmWorkspace({
                 <Card className="bg-[#131315] border-border text-center flex flex-col justify-between gap-4 p-6 min-h-[200px] h-auto overflow-visible">
                   <div className="space-y-2">
                     <h4 className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Recommended Next Action</h4>
-                    <span className="text-2xl sm:text-3xl font-extrabold text-[#75A5ED] block pt-2 break-words leading-tight">{recommendation.status}</span>
+                    <span className={`text-2xl sm:text-3xl font-extrabold block pt-2 break-words leading-tight ${
+                      recommendation.status?.toUpperCase() === 'GREENLIGHT' ? 'text-emerald-400' :
+                      recommendation.status?.toUpperCase() === 'PASS' ? 'text-red-400' :
+                      ['DEVELOP', 'CONSIDER'].includes(recommendation.status?.toUpperCase() || '') ? 'text-amber-400' :
+                      'text-[#75A5ED]'
+                    }`}>
+                      {recommendation.status}
+                    </span>
                     <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded inline-block">
                       Score {recommendation.score}/100
                     </span>

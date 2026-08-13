@@ -36,11 +36,50 @@ export default function ProjectCreate() {
   const [isDragging, setIsDragging] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisStep, setAnalysisStep] = useState("")
+  const [uploadProgress, setUploadProgress] = useState(0)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const FAKE_MESSAGES = [
+    "Uploading script to AI engine...",
+    "Scanning document structure...",
+    "Extracting character profiles...",
+    "Analyzing narrative arcs...",
+    "Generating commercial viability scores...",
+    "Finalizing metadata extraction..."
+  ];
+
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setUploadProgress(0);
+      return;
+    }
+    
+    setAnalysisStep(FAKE_MESSAGES[0]);
+
+    // Timer for progress
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 95) return 95; // Wait for real fetch to finish
+        const step = Math.random() * 8 + 2;
+        return Math.min(prev + step, 95);
+      });
+    }, 600);
+
+    // Timer for messages
+    let msgIndex = 0;
+    const msgInterval = setInterval(() => {
+      msgIndex = (msgIndex + 1) % FAKE_MESSAGES.length;
+      setAnalysisStep(FAKE_MESSAGES[msgIndex]);
+    }, 2500);
+
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(msgInterval);
+    }
+  }, [isAnalyzing]);
 
   const handleScriptUpload = async (file: File) => {
     setIsAnalyzing(true);
-    setAnalysisStep("Uploading script to AI engine...");
 
     try {
       const { FILM_UPLOAD_WORKFLOW_URL } = await import('@/lib/film-workflows');
@@ -63,16 +102,17 @@ export default function ProjectCreate() {
       const uploadData = await uploadRes.json();
       console.log("Upload response:", uploadData);
 
-      setAnalysisStep("Extracting script metadata...");
-
       // Parse the output JSON string from the upload response
       // Response shape: [{ output: "{...json...}", filename: "...", ... }]
       if (Array.isArray(uploadData) && uploadData.length > 0) {
         const row = uploadData[0];
 
         // Parse the output field (it's a JSON string)
-        let meta: Record<string, any> = {};
+        let meta: Record<string, any> | null = {};
         if (typeof row.output === 'string') {
+          if (row.output.trim() === "null") {
+            throw new Error("Could not extract script details. Please ensure you uploaded a valid screenplay document.");
+          }
           try {
             meta = JSON.parse(row.output);
           } catch (e) {
@@ -80,6 +120,10 @@ export default function ProjectCreate() {
           }
         } else if (row.output && typeof row.output === 'object') {
           meta = row.output;
+        }
+
+        if (!meta) {
+          throw new Error("Could not extract script details. Please ensure you uploaded a valid screenplay document.");
         }
 
         // Populate form fields from the parsed metadata
@@ -104,13 +148,20 @@ export default function ProjectCreate() {
       // Start with empty analysis — tabs will fetch live when visited
       setAnalysisReport({ sections: {} });
 
+      setUploadProgress(100);
+      setAnalysisStep("Extraction complete!");
+      
+      // Give a tiny visual pause at 100% before closing loader
+      await new Promise(resolve => setTimeout(resolve, 600));
+
       toast.success("Script uploaded successfully!");
     } catch (err: any) {
-      console.error("Screenplay analysis error:", err);
+      console.warn("Screenplay analysis error:", err);
       toast.error(err?.message || "Failed to upload screenplay");
     } finally {
       setIsAnalyzing(false);
       setAnalysisStep("");
+      setUploadProgress(0);
     }
   };
 
@@ -215,7 +266,7 @@ export default function ProjectCreate() {
       <div className="flex-1 p-8 space-y-12">
         <div className="max-w-[1400px] mx-auto text-center mb-18 pt-6">
           <h1 className="text-4xl m-0 font-medium text-foreground flex items-center justify-center gap-2 text-gradient">
-            Hey, <span className="">{currentUser}</span>!
+            Welcome!
           </h1>
           <p className="text-[28px] text-lighttext font-extralight">Kickstart Your Project</p>
         </div>
@@ -243,9 +294,8 @@ export default function ProjectCreate() {
                   </div>
                   {/* Fake progress bar */}
                   <div className="w-full max-w-xs h-1.5 bg-[#1E1E1E] rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full animate-infinite-loading" style={{
-                      width: "100%",
-                      animation: "loading-pulse 1.5s infinite ease-in-out"
+                    <div className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-300 ease-out" style={{
+                      width: `${uploadProgress}%`
                     }} />
                   </div>
                 </div>

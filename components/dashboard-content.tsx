@@ -75,7 +75,7 @@ export default function DashboardContent() {
       <div className="flex-1 p-8 space-y-12">
         <div className="text-center space-y-3 mb-20 pt-8">
           <h1 className="text-4xl m-0 font-medium text-foreground flex items-center justify-center gap-2">
-            <span><Image src={`${assetPrefix}/assets/images/hand.png`} alt="Rover Logo" width={46} height={46} /></span> <p className="text-gradient">Hey, {currentUser}!</p>
+            <span><Image src={`${assetPrefix}/assets/images/hand.png`} alt="Waving Hand" width={46} height={46} /></span> <p className="text-gradient">Welcome!</p>
           </h1>
           <p className="text-[28px] text-lighttext font-extralight">What would you like to start with today?</p>
         </div>

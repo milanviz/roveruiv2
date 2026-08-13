@@ -400,10 +400,13 @@ export async function fetchMetadataWorkflow(scriptId: string): Promise<{
   fileUrl: string | null
   raw: unknown
 }> {
-  const workflowRes = await fetch(FILM_METADATA_WORKFLOW_URL, {
+  const workflowRes = await fetch("/api/proxy-workflow", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ script_id: scriptId }),
+    body: JSON.stringify({ 
+      url: FILM_METADATA_WORKFLOW_URL, 
+      payload: { script_id: scriptId } 
+    }),
   })
 
   if (!workflowRes.ok) {
@@ -421,10 +424,13 @@ export async function fetchMetadataWorkflow(scriptId: string): Promise<{
 }
 
 export async function fetchSummarizeWorkflow(fileUrl: string, prompt: string): Promise<unknown> {
-  const workflowRes = await fetch(FILM_SUMMARIZE_WORKFLOW_URL, {
+  const workflowRes = await fetch("/api/proxy-workflow", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: fileUrl, prompt }),
+    body: JSON.stringify({ 
+      url: FILM_SUMMARIZE_WORKFLOW_URL, 
+      payload: { url: fileUrl, prompt } 
+    }),
   })
 
   if (!workflowRes.ok) {

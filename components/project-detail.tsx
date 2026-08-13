@@ -33,6 +33,7 @@ import {
   Plus,
   CloudHail,
   ArrowDown,
+  Mic,
 } from "lucide-react"
 import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect, forwardRef, useImperativeHandle, memo } from "react"
 import Link from "next/link"
@@ -157,6 +158,7 @@ export default function ProjectDetail() {
   const [readyForSendMessage, setReadyForSendMessage] = useState(false)
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [isAmbientListenOpen, setIsAmbientListenOpen] = useState(false)
 
   const modalRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLDivElement>(null)
@@ -967,7 +969,7 @@ export default function ProjectDetail() {
                                             <span>{catOpt.option}</span>
                                           </div>
                                           {selectedVisibility === catOpt.option && <Check className="w-4 h-4 text-green-500" />}
-                                        </button>
+                                        </button> 
                                       )
                                     })}
                                   </div>
@@ -975,6 +977,20 @@ export default function ProjectDetail() {
                               </div>
 
                               <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setIsAmbientListenOpen(true)}
+                                  className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
+                                >
+                                  <Image
+                                    src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
+                                    alt="Ambient Listen"
+                                    width={14}
+                                    height={14}
+                                    className="object-contain"
+                                    unoptimized
+                                  />
+                                  <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
+                                </button>
                                 <button
                                   onClick={() => mainTextareaControllerRef.current?.send()}
                                   className="bg-[var(--color-icon-background)] flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"
@@ -1220,6 +1236,20 @@ export default function ProjectDetail() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIsAmbientListenOpen(true)}
+                          className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
+                        >
+                          <Image
+                            src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
+                            alt="Ambient Listen"
+                            width={14}
+                            height={14}
+                            className="object-contain"
+                            unoptimized
+                          />
+                          <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
+                        </button>
                         {sendMessage ? (
                           <button
                             onClick={() => stopStreaming(setSendMessage)}
@@ -1352,6 +1382,20 @@ export default function ProjectDetail() {
                             </div>
 
                             <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setIsAmbientListenOpen(true)}
+                                className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
+                              >
+                                <Image
+                                  src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
+                                  alt="Ambient Listen"
+                                  width={14}
+                                  height={14}
+                                  className="object-contain"
+                                  unoptimized
+                                />
+                                <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
+                              </button>
                               <button
                                 onClick={() => mainTextareaControllerRef.current?.send()}
                                 className="bg-[var(--color-icon-background)] flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"
@@ -1602,6 +1646,20 @@ export default function ProjectDetail() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIsAmbientListenOpen(true)}
+                          className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
+                        >
+                          <Image
+                            src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
+                            alt="Ambient Listen"
+                            width={14}
+                            height={14}
+                            className="object-contain"
+                            unoptimized
+                          />
+                          <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
+                        </button>
                         {sendMessage ?
                           <button
                             onClick={() => stopStreaming(setSendMessage)}
@@ -1651,6 +1709,36 @@ export default function ProjectDetail() {
             >
               <ArrowDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
             </button>
+          </div>
+        </div>
+      )}
+      {isAmbientListenOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-[#111] border border-[#333] rounded-3xl p-10 flex flex-col items-center justify-center gap-8 relative shadow-2xl max-w-sm w-full mx-4">
+            <button
+              onClick={() => setIsAmbientListenOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div className="relative flex items-center justify-center mt-4 h-32 w-32">
+              <div className="absolute w-32 h-32 bg-[#75A5ED]/20 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
+              <div className="absolute w-24 h-24 bg-[#75A5ED]/40 rounded-full animate-ping" style={{ animationDuration: '1.5s', animationDelay: '0.2s' }} />
+              <Image
+                src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
+                alt="Listening"
+                width={80}
+                height={80}
+                className="relative z-10 object-contain drop-shadow-[0_0_15px_rgba(117,165,237,0.5)]"
+                unoptimized
+              />
+            </div>
+            
+            <div className="text-center space-y-2 mb-2 relative z-10">
+              <h3 className="text-xl font-medium text-foreground tracking-tight">Listening...</h3>
+              <p className="text-sm text-muted-foreground">Go ahead, I'm listening.</p>
+            </div>
           </div>
         </div>
       )}
