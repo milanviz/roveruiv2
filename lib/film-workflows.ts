@@ -8,10 +8,10 @@ export type FilmAnalysisSection =
   | "greenlight"
 
 export const FILM_UPLOAD_WORKFLOW_URL =
-  "https://ai-demo.vizru-ras.com/workflow.trigger/6a7ad4f1c5d8c005b007707d"
+  "https://ai-demo.vizru-ras.com/workflow.trigger/roverscriptdemo6a7ad4f143079"
 
 export const FILM_METADATA_WORKFLOW_URL =
-  "https://ai-demo.vizru-ras.com/workflow.trigger/6a7b1a94e50111edfa0f4a14"
+  "https://ai-demo.vizru-ras.com/workflow.trigger/roverscriptdemodetails6a7b1a94831b3"
 
 export const FILM_SUMMARIZE_WORKFLOW_URL =
   "https://ai-demo.vizru-ras.com/workflow.trigger/6a7b11f304758ab3f80c6875"
@@ -266,7 +266,7 @@ function projectContext(project: FilmProjectContext): string {
 const GROUNDING = `Ground every claim ONLY in the attached screenplay. Do not invent characters, places, or plot points not present in the script. If something is unclear, use "not specified". Return JSON only — no markdown, no prose outside the JSON object.`
 
 const SECTION_SCHEMAS: Record<FilmAnalysisSection, string> = {
-  overview: `{
+  overview: `{    
   "recommendation": { "status": "GREENLIGHT|DEVELOP|PASS", "score": 0-100, "confidence": "High|Medium|Low", "summary": "string" },
   "scores": { "story": 0-100, "commercial": 0-100, "production": 0-100, "audience": 0-100, "originality": 0-100, "risk": 0-100 },
   "logline": "string",

@@ -74,7 +74,7 @@ export default function MiniSidebar() {
   return (
     <div className="w-20 bg-sidebar border-r border-sidebar-border flex flex-col items-center py-3 gap-4 flex-shrink-0">
       {/* Mini Logo */}
-      <Link href={`/?=${Date.now()}`} onClick={() => setActiveId("explore")}>
+      <Link href="/" onClick={() => setActiveId("explore")}>
         <div className="w-20 h-[49px] pb-2 flex items-center justify-center cursor-pointer border-b border-border">
           <Image
             src={`${assetPrefix}/assets/icons/rover_icon.svg`}
@@ -89,7 +89,7 @@ export default function MiniSidebar() {
       <nav className="flex flex-col gap-4 flex-1">
         {miniNavItems.map((item) => {
           const isActive = activeId === item.id
-          const href = item.href === "/" ? `/?=${Date.now()}` : item.href
+          const href = item.href
 
           return (
             <Link

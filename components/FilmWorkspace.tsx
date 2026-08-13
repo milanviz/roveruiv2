@@ -21,10 +21,6 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "sonner"
 import type { FilmAnalysisSection } from "@/lib/film-workflows"
-import {
-  STATIC_FILM_ANALYSIS,
-  STATIC_FILM_METADATA,
-} from "@/lib/static-film-data"
 
 interface FilmWorkspaceProps {
   projectId: string
@@ -45,46 +41,172 @@ const TAB_TO_SECTION: Record<string, FilmAnalysisSection> = {
   Greenlight: "greenlight",
 }
 
+const SECTION_LABELS: Record<string, string> = {
+  overview: "Overview & Readiness",
+  story: "Story & Structure",
+  characters: "Character Breakdown",
+  commercial: "Commercial Viability",
+  production: "Production Analysis",
+  development: "Development Notes",
+  greenlight: "Greenlight Decision",
+}
+
+/** Animated shimmer bar used inside skeleton layouts. */
+function ShimmerBlock({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`rounded-md bg-gradient-to-r from-[#1a1a1f] via-[#252530] to-[#1a1a1f] animate-shimmer ${className}`}
+      style={{ backgroundSize: "200% 100%" }}
+    />
+  )
+}
+
+function SectionSkeleton({ sectionName }: { sectionName?: string }) {
+  const label = sectionName ? SECTION_LABELS[sectionName] || sectionName : "this section"
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Header skeleton */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <ShimmerBlock className="h-5 w-48" />
+          <ShimmerBlock className="h-3 w-72 opacity-60" />
+        </div>
+        <ShimmerBlock className="h-8 w-24 rounded-full" />
+      </div>
+
+      {/* Main card skeleton — score + bars */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-[#131315] border border-border rounded-xl p-6 space-y-5">
+          <ShimmerBlock className="h-3 w-32" />
+          <div className="flex items-baseline gap-3">
+            <ShimmerBlock className="h-12 w-20" />
+            <ShimmerBlock className="h-4 w-28 opacity-50" />
+          </div>
+          <div className="space-y-2">
+            <ShimmerBlock className="h-3 w-full" />
+            <ShimmerBlock className="h-3 w-5/6" />
+            <ShimmerBlock className="h-3 w-4/6" />
+          </div>
+          <div className="flex gap-4 pt-1">
+            <ShimmerBlock className="h-3 w-24" />
+            <ShimmerBlock className="h-3 w-28" />
+          </div>
+        </div>
+
+        {/* Side card — aspect scores */}
+        <div className="bg-[#131315] border border-border rounded-xl p-5 space-y-4">
+          <ShimmerBlock className="h-3 w-28" />
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="flex items-center gap-3">
+              <ShimmerBlock className="h-3 w-24 shrink-0" />
+              <ShimmerBlock className="h-2.5 flex-1 rounded-full" />
+              <ShimmerBlock className="h-3 w-8 shrink-0" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom section skeleton — two column cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-[#131315] border border-border rounded-xl p-5 space-y-4">
+          <ShimmerBlock className="h-4 w-36" />
+          <ShimmerBlock className="h-3 w-full" />
+          <div className="space-y-3 pt-1">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex gap-3 items-start">
+                <ShimmerBlock className="h-8 w-8 rounded-md shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <ShimmerBlock className="h-3 w-3/4" />
+                  <ShimmerBlock className="h-2.5 w-full opacity-50" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="bg-[#131315] border border-border rounded-xl p-5 space-y-4">
+          <ShimmerBlock className="h-4 w-40" />
+          <div className="space-y-3 pt-1">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="flex items-center gap-3">
+                <ShimmerBlock className="h-3 w-20 shrink-0" />
+                <ShimmerBlock className="h-2.5 flex-1 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Status line */}
+      <div className="flex items-center justify-center gap-3 pt-4 pb-2">
+        <Loader2 className="w-4 h-4 animate-spin text-[#75A5ED]" />
+        <p className="text-sm text-muted-foreground">
+          Analyzing screenplay — generating <span className="text-slate-300 font-medium">{label}</span>…
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function SectionStatus({
   loading,
   error,
   onRetry,
   ready,
   children,
+  sectionName,
 }: {
   loading: boolean
   error: string | null
   onRetry: () => void
   ready: boolean
   children: ReactNode
+  sectionName?: string
 }) {
-  if (loading && !ready) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
-        <Loader2 className="w-8 h-8 animate-spin text-[#75A5ED]" />
-        <p className="text-sm">Analyzing screenplay for this section…</p>
-        <p className="text-xs opacity-70">Other tabs stay available while this runs.</p>
-      </div>
-    )
-  }
-
   if (error && !ready) {
+    const label = sectionName ? SECTION_LABELS[sectionName] || sectionName : "this section"
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-24">
-        <AlertTriangle className="w-8 h-8 text-amber-400" />
-        <p className="text-sm text-slate-200">Couldn’t generate this section</p>
-        <p className="text-xs text-muted-foreground max-w-md text-center">{error}</p>
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-amber-400" />
+        </div>
+        <div className="text-center space-y-1.5">
+          <p className="text-sm font-medium text-slate-200">
+            Couldn&apos;t generate {label}
+          </p>
+          <p className="text-xs text-muted-foreground max-w-md">{error}</p>
+        </div>
         <button
           onClick={onRetry}
-          className="mt-2 px-3 py-1.5 text-xs rounded-lg border border-border bg-secondary hover:bg-muted flex items-center gap-1.5 cursor-pointer"
+          className="mt-1 px-4 py-2 text-xs font-medium rounded-lg border border-[#75A5ED]/30 bg-[#75A5ED]/10 hover:bg-[#75A5ED]/20 text-[#75A5ED] flex items-center gap-2 cursor-pointer transition-colors"
         >
-          <RefreshCw className="w-3.5 h-3.5" /> Retry analysis
+          <RefreshCw className="w-3.5 h-3.5" /> Retry Analysis
         </button>
       </div>
     )
   }
 
-  return <>{children}</>
+  if (!ready) {
+    return (
+      <div className="relative">
+        <SectionSkeleton sectionName={sectionName} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          onClick={onRetry}
+          title="Force retry analysis for this section"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[#1a1a1f] border border-border text-muted-foreground hover:text-foreground hover:bg-[#252530] transition-all cursor-pointer shadow-sm"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Re-analyze Section
+        </button>
+      </div>
+      {children}
+    </div>
+  )
 }
 
 const FilmWorkspace = memo(function FilmWorkspace({
@@ -95,40 +217,31 @@ const FilmWorkspace = memo(function FilmWorkspace({
   activeTab,
   setActiveTab
 }: FilmWorkspaceProps) {
-  // Demo mode: always serve curated static analysis for ஆண் பாவம்
-  const useMocks = true
-
   const [metadata, setMetadata] = useState({
-    title: projectName || STATIC_FILM_METADATA.title,
-    language: STATIC_FILM_METADATA.language,
-    genre: STATIC_FILM_METADATA.genre,
-    targetMarket: STATIC_FILM_METADATA.targetMarket,
-    releaseStrategy: STATIC_FILM_METADATA.releaseStrategy,
-    expectedBudget: STATIC_FILM_METADATA.expectedBudget,
-    pages: STATIC_FILM_METADATA.pages,
-    runtimeMinutes: STATIC_FILM_METADATA.runtimeMinutes,
+    title: projectName || "",
+    language: "",
+    genre: "",
+    targetMarket: "",
+    releaseStrategy: "",
+    expectedBudget: "",
+    pages: 0,
+    runtimeMinutes: 0,
   })
-  const [analysisReport, setAnalysisReport] = useState<any>(STATIC_FILM_ANALYSIS)
+  const [analysisReport, setAnalysisReport] = useState<any>({})
   const [loadingSections, setLoadingSections] = useState<Record<string, boolean>>({})
   const [sectionErrors, setSectionErrors] = useState<Record<string, string | null>>({})
-  const [readySections, setReadySections] = useState<Record<string, boolean>>({
-    overview: true,
-    story: true,
-    characters: true,
-    commercial: true,
-    production: true,
-    development: true,
-    greenlight: true,
-  })
+  const [readySections, setReadySections] = useState<Record<string, boolean>>({})
   const [hydrated, setHydrated] = useState(false)
+  
   const inflightRef = useRef<Map<string, Promise<void>>>(new Map())
   const readySectionsRef = useRef(readySections)
   readySectionsRef.current = readySections
+  const fileUrlRef = useRef<string | null>(null)
 
   const applyMetadata = (parsed: Record<string, any>) => {
     setMetadata(prev => ({
       ...prev,
-      title: parsed.title || parsed.screenplay_title || prev.title,
+      title: parsed.title || parsed.screenplay_title || parsed.file_name || prev.title,
       language: parsed.language || parsed.screenplay_language || prev.language,
       genre: parsed.genre || prev.genre,
       targetMarket: parsed.targetMarket || parsed.target_market || parsed.target_market_industry || prev.targetMarket,
@@ -139,12 +252,26 @@ const FilmWorkspace = memo(function FilmWorkspace({
     }))
   }
 
-  const markSectionsFromAnalysis = (analysis: any) => {
-    if (!analysis?.sections || typeof analysis.sections !== "object") return
-    const nextReady: Record<string, boolean> = {}
-    for (const key of Object.keys(analysis.sections)) {
-      if (analysis.sections[key]?.data) nextReady[key] = true
+  useEffect(() => {
+    if (projectName) {
+      setMetadata(prev => ({ ...prev, title: projectName }));
     }
+  }, [projectName]);
+
+  const markSectionsFromAnalysis = (analysis: any) => {
+    if (typeof analysis !== "object" || !analysis) return
+    const nextReady: Record<string, boolean> = {}
+    
+    // Naively assume if there is data for a section in the top level object, it's ready.
+    // E.g. if 'scores' exists, maybe overview and story are ready.
+    if (analysis.recommendation) nextReady.overview = true
+    if (analysis.storyScorecard) nextReady.story = true
+    if (analysis.charactersList) nextReady.characters = true
+    if (analysis.comparables) nextReady.commercial = true
+    if (analysis.productionSummary) nextReady.production = true
+    if (analysis.developmentNotes || analysis.rewriteNotes) nextReady.development = true
+    if (analysis.killRisks) nextReady.greenlight = true
+
     if (Object.keys(nextReady).length) {
       setReadySections(prev => {
         const next = { ...prev, ...nextReady }
@@ -154,20 +281,137 @@ const FilmWorkspace = memo(function FilmWorkspace({
     }
   }
 
-  const analyzeSection = async (_section: FilmAnalysisSection, _force = false) => {
-    // Static demo — analysis is preloaded; no live workflow calls.
-    return
+  const analyzeSection = async (section: FilmAnalysisSection, force = false) => {
+    if (!scriptId) return;
+    
+    if (!fileUrlRef.current) {
+      // Try to fetch fileUrl if missing
+      try {
+        const { fetchMetadataWorkflow } = await import('@/lib/film-workflows');
+        const { fileUrl } = await fetchMetadataWorkflow(scriptId);
+        if (fileUrl) fileUrlRef.current = fileUrl;
+      } catch(e) {}
+      
+      if (!fileUrlRef.current) {
+         setSectionErrors(prev => ({ ...prev, [section]: "Missing file URL for analysis." }));
+         return;
+      }
+    }
+    
+    if (!force && readySectionsRef.current[section]) return;
+    if (inflightRef.current.has(section)) return;
+
+    setLoadingSections(prev => ({ ...prev, [section]: true }));
+    setSectionErrors(prev => ({ ...prev, [section]: null }));
+    if (force) {
+      setReadySections(prev => {
+        const next = { ...prev, [section]: false };
+        readySectionsRef.current = next;
+        return next;
+      });
+    }
+
+    const promise = (async () => {
+      try {
+        const { fetchSummarizeWorkflow, buildSectionPrompt } = await import('@/lib/film-workflows');
+        
+        const prompt = buildSectionPrompt(section, {
+            title: metadata.title,
+            language: metadata.language,
+            genre: metadata.genre,
+            target_market: metadata.targetMarket,
+            release_strategy: metadata.releaseStrategy,
+            expected_budget: metadata.expectedBudget,
+        });
+
+        const raw = await fetchSummarizeWorkflow(fileUrlRef.current!, prompt);
+        
+        setAnalysisReport(prev => {
+          const next = { ...prev, ...((raw as any) || {}) };
+          try {
+            localStorage.setItem("temp_film_analysis", JSON.stringify(next));
+          } catch(e) {}
+          return next;
+        });
+
+        if (raw) {
+          applyMetadata(raw as Record<string, any>);
+        }
+
+        setReadySections(prev => {
+          const next = { ...prev, [section]: true };
+          readySectionsRef.current = next;
+          return next;
+        });
+      } catch (err: any) {
+        console.error(`Analysis failed for ${section}:`, err);
+        setSectionErrors(prev => ({ ...prev, [section]: err.message || "Analysis failed" }));
+      } finally {
+        setLoadingSections(prev => ({ ...prev, [section]: false }));
+        inflightRef.current.delete(section);
+      }
+    })();
+
+    inflightRef.current.set(section, promise);
+    await promise;
   }
 
+  // Hydrate local cache and fetch live metadata
   useEffect(() => {
-    applyMetadata({
-      ...STATIC_FILM_METADATA,
-      title: projectName || STATIC_FILM_METADATA.title,
-    })
-    setAnalysisReport(STATIC_FILM_ANALYSIS)
-    markSectionsFromAnalysis(STATIC_FILM_ANALYSIS)
-    setHydrated(true)
+    let mounted = true;
+    
+    try {
+      const tempMeta = localStorage.getItem("temp_film_metadata");
+      if (tempMeta) {
+        const parsed = JSON.parse(tempMeta);
+        if (parsed.scriptId === scriptId) {
+          applyMetadata(parsed);
+        }
+      }
+      
+      const tempAnalysis = localStorage.getItem("temp_film_analysis");
+      if (tempAnalysis) {
+        const parsed = JSON.parse(tempAnalysis);
+        setAnalysisReport(parsed);
+        markSectionsFromAnalysis(parsed);
+      }
+    } catch(e) {}
+    
+    if (scriptId) {
+      import('@/lib/film-workflows').then(({ fetchMetadataWorkflow }) => {
+        fetchMetadataWorkflow(scriptId).then(({ metadata: meta, fileUrl }) => {
+          if (!mounted) return;
+          if (meta) applyMetadata(meta as Record<string, any>);
+          if (fileUrl) fileUrlRef.current = fileUrl;
+          setHydrated(true);
+        }).catch(err => {
+          console.error("Live metadata fetch failed:", err);
+          if (mounted) setHydrated(true);
+        });
+      });
+    } else {
+      setHydrated(true);
+    }
+    
+    return () => { mounted = false; };
   }, [scriptId, projectId, projectName])
+
+  // Fire ALL section analyses in parallel once hydration completes.
+  // This preloads every tab so results are ready when the user switches.
+  const allSectionsFiredRef = useRef(false)
+  useEffect(() => {
+    if (!hydrated || allSectionsFiredRef.current) return
+    allSectionsFiredRef.current = true
+
+    const allSections: FilmAnalysisSection[] = [
+      "overview", "story", "characters", "commercial",
+      "production", "development", "greenlight",
+    ]
+    // Fire all concurrently — each call is independently guarded by inflightRef
+    allSections.forEach(section => {
+      analyzeSection(section)
+    })
+  }, [hydrated]);
 
   const handleSaveToInsights = (item: { Key: string; Question: string; Answer: string; Tags: string }) => {
     if (typeof window !== "undefined") {
@@ -217,18 +461,18 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const activeSection = TAB_TO_SECTION[activeTab]
   const sectionLoading = activeSection ? !!loadingSections[activeSection] : false
   const sectionError = activeSection ? sectionErrors[activeSection] || null : null
-  const sectionReady = useMocks || (activeSection ? !!readySections[activeSection] : true)
+  const sectionReady = activeSection ? !!readySections[activeSection] : true
 
-  // --- DATA (static ஆண் பாவம் analysis) ---
-  const recommendation = analysisReport?.recommendation || STATIC_FILM_ANALYSIS.recommendation || {
+  // --- DATA (Fallback to empty states if not yet analyzed) ---
+  const recommendation = analysisReport?.recommendation || {
     status: "—", score: 0, confidence: "—", summary: ""
   }
 
-  const scores = analysisReport?.scores || STATIC_FILM_ANALYSIS.scores || {
+  const scores = analysisReport?.scores || {
     story: 0, commercial: 0, production: 0, audience: 0, originality: 0, risk: 0
   }
 
-  const storyScorecard = analysisReport?.storyScorecard || STATIC_FILM_ANALYSIS.storyScorecard || null
+  const storyScorecard = analysisReport?.storyScorecard || null
 
   const productionSummary = analysisReport?.productionSummary || (analysisReport?.attributes ? {
     shootDays: analysisReport.attributes.shootDays || 0,
@@ -239,16 +483,16 @@ const FilmWorkspace = memo(function FilmWorkspace({
     extras: analysisReport.attributes.extras || 0,
     vfxScenes: analysisReport.attributes.vfxScenes || 0,
     songs: analysisReport.attributes.songs || 0
-  } : (STATIC_FILM_ANALYSIS.productionSummary || {
+  } : {
     shootDays: 0, locations: 0, nightScenes: 0, actionSequences: 0,
     majorCharacters: 0, extras: 0, vfxScenes: 0, songs: 0
-  }))
+  })
 
-  const risks: any[] = analysisReport?.risks || STATIC_FILM_ANALYSIS.risks || []
+  const risks: any[] = analysisReport?.risks || []
 
-  const opportunities: any[] = analysisReport?.opportunities || STATIC_FILM_ANALYSIS.opportunities || []
+  const opportunities: any[] = analysisReport?.opportunities || []
 
-  const timelineEvents: any[] = (analysisReport?.timelineEvents || STATIC_FILM_ANALYSIS.timelineEvents || []).map((e: any) => ({
+  const timelineEvents: any[] = (analysisReport?.timelineEvents || []).map((e: any) => ({
     label: e.label || e.title || "",
     page: typeof e.page === "number" ? e.page : parseInt(String(e.page).replace(/\D/g, "")) || 1,
     tension: e.tension || 0,
@@ -258,9 +502,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const tensionPoints: { x: number; y: number; label: string }[] = (() => {
     const source: any[] = analysisReport?.tensionCurve?.length
       ? analysisReport.tensionCurve
-      : (STATIC_FILM_ANALYSIS.tensionCurve as any[])?.length
-        ? (STATIC_FILM_ANALYSIS.tensionCurve as any[])
-        : timelineEvents
+      : timelineEvents
     if (!source.length) return []
     return source.map((pt: any, i: number, arr: any[]) => {
       const tension = Number(pt.tension ?? 0)
@@ -283,9 +525,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
     { name: "Climax Emotional Payoff", rating: analysisReport.cinemaEvaluation.climaxEmotionalPayoff, explanation: analysisReport.cinemaEvaluation.climaxEmotionalPayoffDesc },
     { name: "Mass Moments", rating: analysisReport.cinemaEvaluation.massMoments, explanation: analysisReport.cinemaEvaluation.massMomentsDesc },
     { name: "Songs Integration", rating: analysisReport.cinemaEvaluation.songsIntegration, explanation: analysisReport.cinemaEvaluation.songsIntegrationDesc }
-  ] : (STATIC_FILM_ANALYSIS.indianCinemaSignals || []))
+  ] : [])
 
-  const charactersList: any[] = (analysisReport?.charactersList || STATIC_FILM_ANALYSIS.charactersList || []).map((c: any) => ({
+  const charactersList: any[] = (analysisReport?.charactersList || []).map((c: any) => ({
     name: c.name,
     role: c.role,
     description: c.description || c.desc || "",
@@ -299,7 +541,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
     transformation: c.transformation || c.resolution || ""
   }))
 
-  const comparables: any[] = (analysisReport?.comparables || STATIC_FILM_ANALYSIS.comparables || []).map((c: any) => ({
+  const comparables: any[] = (analysisReport?.comparables || []).map((c: any) => ({
     title: c.title || c.name || "",
     narrative: typeof c.narrative === "string" ? c.narrative : `${c.narrative || c.narrativeSimilarity || 0}%`,
     audience: typeof c.audience === "string" ? c.audience : `${c.audience || c.audienceMatch || 0}%`,
@@ -308,31 +550,31 @@ const FilmWorkspace = memo(function FilmWorkspace({
     explanation: c.explanation || c.context || ""
   }))
 
-  const distributionPotentials = analysisReport?.distributionPotentials || STATIC_FILM_ANALYSIS.distributionPotentials || {
+  const distributionPotentials = analysisReport?.distributionPotentials || {
     theatrical: 0, ott: 0, panIndia: 0
   }
 
-  const marketingHooks: any[] = analysisReport?.marketingHooks || STATIC_FILM_ANALYSIS.marketingHooks || []
+  const marketingHooks: any[] = analysisReport?.marketingHooks || []
 
-  const viralMoments: any[] = analysisReport?.viralMoments || STATIC_FILM_ANALYSIS.viralMoments || []
+  const viralMoments: any[] = analysisReport?.viralMoments || []
 
-  const locationsList: any[] = analysisReport?.locationsList || STATIC_FILM_ANALYSIS.locationsList || []
+  const locationsList: any[] = analysisReport?.locationsList || []
 
-  const castPlanning: any[] = (analysisReport?.castPlanning || STATIC_FILM_ANALYSIS.castPlanning || []).map((c: any) => ({
+  const castPlanning: any[] = (analysisReport?.castPlanning || []).map((c: any) => ({
     character: c.character || c.name || "",
     starDependency: c.starDependency || c.star || "",
     performance: c.performance || c.requirement || "",
     shootDays: c.shootDays || c.days || 0
   }))
 
-  const budgetBreakdown: any[] = (analysisReport?.budgetBreakdown || STATIC_FILM_ANALYSIS.budgetBreakdown || []).map((b: any) => ({
+  const budgetBreakdown: any[] = (analysisReport?.budgetBreakdown || []).map((b: any) => ({
     category: b.category,
     min: typeof b.min === "number" ? b.min : parseFloat(String(b.min).replace(/[^0-9.]/g, "")) || 0,
     max: typeof b.max === "number" ? b.max : parseFloat(String(b.max).replace(/[^0-9.]/g, "")) || 0,
     confidence: b.confidence
   }))
 
-  const developmentNotes: any[] = (analysisReport?.developmentNotes || analysisReport?.rewriteNotes || STATIC_FILM_ANALYSIS.developmentNotes || STATIC_FILM_ANALYSIS.rewriteNotes || []).map((n: any) => ({
+  const developmentNotes: any[] = (analysisReport?.developmentNotes || analysisReport?.rewriteNotes || []).map((n: any) => ({
     priority: n.priority,
     title: n.title,
     description: n.description || n.summary || "",
@@ -341,24 +583,24 @@ const FilmWorkspace = memo(function FilmWorkspace({
     actionable: n.actionable || n.action || ""
   }))
 
-  const draftComparison: any[] = analysisReport?.draftComparison || STATIC_FILM_ANALYSIS.draftComparison || []
+  const draftComparison: any[] = analysisReport?.draftComparison || []
 
-  const whyItWorks: string[] = analysisReport?.whyItWorks || STATIC_FILM_ANALYSIS.whyItWorks || []
+  const whyItWorks: string[] = analysisReport?.whyItWorks || []
 
-  const killRisks: { title: string; severity: string; summary: string }[] = (analysisReport?.killRisks || STATIC_FILM_ANALYSIS.killRisks || []).map((r: any) => ({
+  const killRisks: { title: string; severity: string; summary: string }[] = (analysisReport?.killRisks || []).map((r: any) => ({
     title: r.title || "",
     severity: r.severity || "Medium",
     summary: r.summary || r.description || "",
   }))
 
-  const nextSteps: { step: string; owner: string; timing: string }[] = (analysisReport?.nextSteps || STATIC_FILM_ANALYSIS.nextSteps || []).map((s: any, idx: number) => ({
+  const nextSteps: { step: string; owner: string; timing: string }[] = (analysisReport?.nextSteps || []).map((s: any, idx: number) => ({
     step: s.step || s.title || `Step ${idx + 1}`,
     owner: s.owner || "",
     timing: s.timing || "",
   }))
 
-  const logline = analysisReport?.logline || STATIC_FILM_ANALYSIS.logline || ""
-  const synopsis = analysisReport?.synopsis || STATIC_FILM_ANALYSIS.synopsis || ""
+  const logline = analysisReport?.logline || ""
+  const synopsis = analysisReport?.synopsis || ""
 
   const retryActiveSection = () => {
     if (activeSection) analyzeSection(activeSection, true)
@@ -422,6 +664,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              sectionName="overview"
             >
             <div className="space-y-6">
               {/* Top Summary Card */}
@@ -643,6 +886,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              sectionName="story"
             >
             <div className="space-y-6">
               
@@ -813,6 +1057,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              sectionName="characters"
             >
             <div className="space-y-6">
               
@@ -922,6 +1167,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              sectionName="commercial"
             >
             <div className="space-y-6">
               
@@ -1043,6 +1289,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              sectionName="production"
             >
             <div className="space-y-6">
               
@@ -1206,6 +1453,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              sectionName="development"
             >
             <div className="space-y-6">
               
@@ -1331,6 +1579,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              sectionName="greenlight"
             >
             <div className="space-y-6">
               

@@ -255,10 +255,12 @@ export default function ProjectDetail() {
         if (!row) return
 
         const title =
+          selectedProject?.ProjectName ||
+          row.title ||
           data.metadata?.title ||
           data.metadata?.screenplay_title ||
-          row.title ||
-          selectedProject?.ProjectName ||
+          data.metadata?.file_name ||
+          row.file_name ||
           "Film Project"
 
         setSelectedProjectTitle(title)

@@ -63,7 +63,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         >
           <Menu size={20} />
         </button>
-        <Link href={`/?=${Date.now()}`}>
+        <Link href="/">
           <Image src={`${assetPrefix}/assets/icons/rover_label.svg`} alt="Rover Logo" width={135} height={28} />
           {/* <h1 className="text-sm font-bold text-sidebar-foreground hidden md:block tracking-wide cursor-pointer">
             ROVER

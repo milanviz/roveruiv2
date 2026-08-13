@@ -13,28 +13,26 @@ import {
 
 export const runtime = "nodejs"
 
-function ensureStaticProject(scriptId: string) {
-  const existing = getFilmProjectByScriptId(scriptId)
-  if (existing?.analysis_json) {
-    const parsed = parseAnalysisJson(existing.analysis_json)
-    if (parsed.sections && Object.keys(parsed.sections).length >= 7) {
-      return existing
-    }
+function ensureProject(scriptId: string) {
+  let existing = getFilmProjectByScriptId(scriptId)
+  if (!existing) {
+    // If it doesn't exist at all, we create a basic placeholder entry
+    // to prevent crashes, but we don't force static metadata on it.
+    existing = upsertFilmProject({
+      script_id: scriptId,
+      project_id: `proj-${Date.now()}`,
+      title: "Untitled Project",
+      filename: "",
+      language: "",
+      genre: "",
+      target_market: "",
+      release_strategy: "",
+      expected_budget: "",
+      metadata: {},
+      analysis: { sections: {} },
+    })
   }
-
-  return upsertFilmProject({
-    script_id: scriptId || STATIC_SCRIPT_ID,
-    project_id: existing?.project_id || STATIC_PROJECT_ID,
-    title: STATIC_FILM_METADATA.title,
-    filename: STATIC_FILM_METADATA.filename,
-    language: STATIC_FILM_METADATA.language,
-    genre: STATIC_FILM_METADATA.genre,
-    target_market: STATIC_FILM_METADATA.targetMarket,
-    release_strategy: STATIC_FILM_METADATA.releaseStrategy,
-    expected_budget: STATIC_FILM_METADATA.expectedBudget,
-    metadata: STATIC_FILM_METADATA,
-    analysis: STATIC_FILM_ANALYSIS,
-  })
+  return existing
 }
 
 export async function GET(
@@ -47,17 +45,22 @@ export async function GET(
       return NextResponse.json({ error: "script_id is required" }, { status: 400 })
     }
 
-    const project = ensureStaticProject(scriptId)
+    const project = ensureProject(scriptId)
+    let storedMetadata = {}
+    try {
+      if (project?.metadata_json) storedMetadata = JSON.parse(project.metadata_json)
+    } catch(e) {}
+    
     const storedAnalysis = parseAnalysisJson(project?.analysis_json)
 
     return NextResponse.json({
       script_id: scriptId,
       project,
       file_url: project?.file_url ?? null,
-      metadata: STATIC_FILM_METADATA,
-      analysis: storedAnalysis?.sections ? storedAnalysis : STATIC_FILM_ANALYSIS,
+      metadata: storedMetadata,
+      analysis: storedAnalysis?.sections ? storedAnalysis : { sections: {} },
       workflowError: null,
-      static: true,
+      static: false,
     })
   } catch (error) {
     console.error("GET /api/film-projects/[scriptId] failed:", error)

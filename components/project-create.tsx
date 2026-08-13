@@ -11,11 +11,6 @@ import { useProjectStore } from "@/app/store/project/project.store"
 import Image from "next/image"
 import CustomButton from "./custom-button"
 import { Toaster, toast } from "sonner"
-import {
-  STATIC_FILM_ANALYSIS,
-  STATIC_FILM_METADATA,
-  STATIC_SCRIPT_ID,
-} from "@/lib/static-film-data"
 
 export default function ProjectCreate() {
   const router = useRouter()
@@ -23,20 +18,19 @@ export default function ProjectCreate() {
   const aiAgentTitle = searchParams.get("title");
   const { currentUser, AiAgentList, setSelectedAiAgent, hydrated } = useProjectStore();
 
-  const [researchTopic, setResearchTopic] = useState(STATIC_FILM_METADATA.title)
-  // const [aiAgent, setAiAgent] = useState(aiAgentTitle || "")
+  const [researchTopic, setResearchTopic] = useState("")
   const [disable, setDisable] = useState(true)
   const [createLoader, setCreateLoader] = useState(false)
 
-  // Film Intelligence specific metadata states — filled from static ஆண் பாவம் demo
-  const [filmLanguage, setFilmLanguage] = useState(STATIC_FILM_METADATA.language)
-  const [filmGenre, setFilmGenre] = useState(STATIC_FILM_METADATA.genre)
-  const [filmTargetMarket, setFilmTargetMarket] = useState(STATIC_FILM_METADATA.targetMarket)
-  const [filmReleaseStrategy, setFilmReleaseStrategy] = useState(STATIC_FILM_METADATA.releaseStrategy)
-  const [filmExpectedBudget, setFilmExpectedBudget] = useState(STATIC_FILM_METADATA.expectedBudget)
-  const [analysisReport, setAnalysisReport] = useState<any>(STATIC_FILM_ANALYSIS)
-  const [scriptId, setScriptId] = useState<string | null>(STATIC_SCRIPT_ID)
-  const [uploadedFilename, setUploadedFilename] = useState<string | null>(STATIC_FILM_METADATA.filename)
+  // Film Intelligence specific metadata states — populated from upload API response
+  const [filmLanguage, setFilmLanguage] = useState("")
+  const [filmGenre, setFilmGenre] = useState("")
+  const [filmTargetMarket, setFilmTargetMarket] = useState("")
+  const [filmReleaseStrategy, setFilmReleaseStrategy] = useState("")
+  const [filmExpectedBudget, setFilmExpectedBudget] = useState("")
+  const [analysisReport, setAnalysisReport] = useState<any>(null)
+  const [scriptId, setScriptId] = useState<string | null>(null)
+  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null)
 
   // Screenplay Script Analyzer States
   const [isDragging, setIsDragging] = useState(false)
@@ -46,43 +40,74 @@ export default function ProjectCreate() {
 
   const handleScriptUpload = async (file: File) => {
     setIsAnalyzing(true);
-    setAnalysisStep("Loading static screenplay analysis…");
+    setAnalysisStep("Uploading script to AI engine...");
 
     try {
-      // Demo mode: ignore live upload/workflows and hydrate from curated ஆண் பாவம் data
-      const filename = file?.name || STATIC_FILM_METADATA.filename;
-      setScriptId(STATIC_SCRIPT_ID);
-      setUploadedFilename(filename);
-      setResearchTopic(STATIC_FILM_METADATA.title);
-      setFilmLanguage(STATIC_FILM_METADATA.language);
-      setFilmGenre(STATIC_FILM_METADATA.genre);
-      setFilmTargetMarket(STATIC_FILM_METADATA.targetMarket);
-      setFilmReleaseStrategy(STATIC_FILM_METADATA.releaseStrategy);
-      setFilmExpectedBudget(STATIC_FILM_METADATA.expectedBudget);
-      setAnalysisReport(STATIC_FILM_ANALYSIS);
-
-      // Persist to local API/SQLite for routing consistency
-      await fetch("/api/film-projects", {
+      const { FILM_UPLOAD_WORKFLOW_URL } = await import('@/lib/film-workflows');
+      const formData = new FormData();
+      
+      const generatedScriptId = `script-${Date.now()}`;
+      formData.append("file", file);
+      formData.append("file_name", file.name);
+      formData.append("script_id", generatedScriptId);
+      
+      const uploadRes = await fetch(FILM_UPLOAD_WORKFLOW_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          script_id: STATIC_SCRIPT_ID,
-          title: STATIC_FILM_METADATA.title,
-          language: STATIC_FILM_METADATA.language,
-          genre: STATIC_FILM_METADATA.genre,
-          target_market: STATIC_FILM_METADATA.targetMarket,
-          release_strategy: STATIC_FILM_METADATA.releaseStrategy,
-          expected_budget: STATIC_FILM_METADATA.expectedBudget,
-          filename,
-          metadata: STATIC_FILM_METADATA,
-          analysis: STATIC_FILM_ANALYSIS,
-        }),
-      }).catch(() => null);
+        body: formData,
+      });
 
-      toast.success("ஆண் பாவம் loaded with full static analysis.");
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      }
+
+      const uploadData = await uploadRes.json();
+      console.log("Upload response:", uploadData);
+
+      setAnalysisStep("Extracting script metadata...");
+
+      // Parse the output JSON string from the upload response
+      // Response shape: [{ output: "{...json...}", filename: "...", ... }]
+      if (Array.isArray(uploadData) && uploadData.length > 0) {
+        const row = uploadData[0];
+
+        // Parse the output field (it's a JSON string)
+        let meta: Record<string, any> = {};
+        if (typeof row.output === 'string') {
+          try {
+            meta = JSON.parse(row.output);
+          } catch (e) {
+            console.warn("Failed to parse output JSON:", e);
+          }
+        } else if (row.output && typeof row.output === 'object') {
+          meta = row.output;
+        }
+
+        // Populate form fields from the parsed metadata
+        if (meta.screenplay_title) setResearchTopic(meta.screenplay_title);
+        if (meta.screenplay_language) setFilmLanguage(meta.screenplay_language);
+        if (meta.genre) setFilmGenre(meta.genre);
+        if (meta.target_market_industry) setFilmTargetMarket(meta.target_market_industry);
+        if (meta.release_strategy) setFilmReleaseStrategy(meta.release_strategy);
+        if (meta.expected_budget) setFilmExpectedBudget(meta.expected_budget);
+
+        // Extract script_id if returned, otherwise use the generated one
+        const extractedScriptId = meta.script_id || meta.scriptId || row.script_id || row.scriptId || generatedScriptId;
+        setScriptId(extractedScriptId);
+        setUploadedFilename(file.name);
+      } else {
+        // Fallback: no parseable response, use filename as title
+        setResearchTopic(file.name.replace(/\.[^/.]+$/, ""));
+        setScriptId(generatedScriptId);
+        setUploadedFilename(file.name);
+      }
+
+      // Start with empty analysis — tabs will fetch live when visited
+      setAnalysisReport({ sections: {} });
+
+      toast.success("Script uploaded successfully!");
     } catch (err: any) {
       console.error("Screenplay analysis error:", err);
-      toast.error(err?.message || "Failed to load screenplay");
+      toast.error(err?.message || "Failed to upload screenplay");
     } finally {
       setIsAnalyzing(false);
       setAnalysisStep("");
@@ -155,8 +180,8 @@ export default function ProjectCreate() {
     const selectedAgentObj = AiAgentList.find((agent) => agent.selected);
     const aiAgent = selectedAgentObj?.title || "Film Intelligence Specialist";
 
-    // Always use the static ஆண் பாவம் script id in demo mode
-    const ensuredScriptId = STATIC_SCRIPT_ID;
+    // Use the live script_id from upload, or generate one if missing
+    const ensuredScriptId = scriptId || `script-${Date.now()}`;
     if (!scriptId) setScriptId(ensuredScriptId);
 
     try {
@@ -284,7 +309,7 @@ export default function ProjectCreate() {
               <label className="block text-sm font-none text-foreground">Screenplay Title</label>
               <input
                 type="text"
-                placeholder="E.g. ஆண் பாவம்"
+                placeholder={uploadedFilename || "E.g. Inception"}
                 ref={inputRef}
                 value={researchTopic}
                 className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
