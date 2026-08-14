@@ -14,7 +14,7 @@ export const FILM_METADATA_WORKFLOW_URL =
   "https://ai-demo.vizru-ras.com/workflow.trigger/roverscriptdemodetails6a7b1a94831b3"
 
 export const FILM_SUMMARIZE_WORKFLOW_URL =
-  "https://ai-demo.vizru-ras.com/workflow.trigger/6a7b11f304758ab3f80c6875"
+  "https://ai-demo.vizru-ras.com/workflow.trigger/roverscriptdemocontentsparent6a7ea1c86776c"
 
 export const FILM_ANALYSIS_SECTIONS: FilmAnalysisSection[] = [
   "overview",
@@ -423,13 +423,13 @@ export async function fetchMetadataWorkflow(scriptId: string): Promise<{
   return { metadata: parseWorkflowOutput(raw), fileUrl: null, raw }
 }
 
-export async function fetchSummarizeWorkflow(fileUrl: string, prompt: string): Promise<unknown> {
+export async function fetchSummarizeWorkflow(fileUrl: string, prompt: string, section: string): Promise<unknown> {
   const workflowRes = await fetch("/api/proxy-workflow", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 
       url: FILM_SUMMARIZE_WORKFLOW_URL, 
-      payload: { url: fileUrl, prompt } 
+      payload: { url: fileUrl, prompt, section_name: section } 
     }),
   })
 

@@ -182,11 +182,26 @@ if (typeof window !== "undefined") {
 
     // Check if it's one of our backend integrations
     const isMockTarget =
-      urlStr.includes("home.qa.hirover.ai") ||
+      urlStr.includes("ai-demo.vizru-ras.com") ||
       urlStr.includes("roverv2-qa.vizru-ras.com") ||
       urlStr.includes("workflow.exec");
 
-    if (!isMockTarget) {
+    // Calls that must reach the real platform even in mock mode.
+    //
+    // The catch-all at the bottom of this file answers anything it does not
+    // recognise with `[{ success: true }]`, which for a call that exists to
+    // return a credential is indistinguishable from the workflow being broken:
+    // the request never leaves the browser and the response contains no token.
+    // The realtime socket cannot be mocked — it is a live server — so the
+    // handshake credential has to come from the live platform too.
+    const PASSTHROUGH = [
+      "6a7eceb5f8dec4e8a9054b52", // socket handshake token
+      "roverscriptdemo6a7ad4f143079", // film upload workflow
+      "roverscriptdemodetails6a7b1a94831b3", // film metadata workflow
+      "roverscriptdemocontentsparent6a7ea1c86776c", // film summarize workflow
+    ];
+
+    if (!isMockTarget || PASSTHROUGH.some((fragment) => urlStr.includes(fragment))) {
       return originalFetch(input, init);
     }
 

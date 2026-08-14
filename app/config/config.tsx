@@ -14,7 +14,7 @@ const PYTHON_API_BASE_URL = "https://roverv2-qa.vizru-ras.com"
 export const APP_CONFIG = {
     PUBLIC_API_URL:
         origin.includes("localhost") || origin.includes("v0.app")
-            ? "https://home.qa.hirover.ai/"
+            ? "https://ai-demo.vizru-ras.com/"
             : typeof window !== "undefined"
                 ? "/"
                 : "",
@@ -36,6 +36,14 @@ export const APP_CONFIG = {
     //Beat workflow
     BEAT_WORKFLOW: "workflow.exec/roverv2beatworkflowforfiles6960d48b7e252",
 
+    // Live voice agent.
+    //
+    // A bare short code, not a `workflow.exec/` path like the others: this one
+    // is run through `sys/api.v1` with `op=workflow.process`, because that is
+    // the only route that accepts a bearer token. The workflow's Agent Node is
+    // in live mode and returns a session handle for the media relay.
+    LIVE_AGENT_WF: "test876a720666dd91d",
+
     PUBLIC_CHAT_API_URL: PYTHON_API_BASE_URL + "/ask-rover",
 
     INSIGHTS_PUBLIC_CHAT_API_URL: PYTHON_API_BASE_URL + "/ask-insight",
@@ -49,10 +57,57 @@ export const APP_CONFIG = {
     TRANSLATE_WF: "workflow.exec/rovertranslatetext6655997db8938",
 
     ORIGIN_URL: origin.includes("localhost") || origin.includes("v0.app")
-        ? "https://home.qa.hirover.ai/"
+        ? "https://ai-demo.vizru-ras.com/"
         : typeof window !== "undefined"
             ? origin
             : "",
 
     WORKFLOW_EXEC: "workflow.exec/",
+
+    /**
+     * The platform's realtime socket server — how a Realtime Push block reaches
+     * this app.
+     *
+     * Its own host and port, not the API's: the platform serves the app on 443
+     * and the socket server separately, so this cannot be derived from the API
+     * URL. It is what the platform calls `ExternalSocketServer`.
+     */
+    SOCKET_URL:
+        process.env.NEXT_PUBLIC_SOCKET_URL || "https://chat-react-app.vizru-ras.com",
+
+    /**
+     * Mints the JWT the socket handshake is authenticated with.
+     *
+     * A different token from the one `lib/auth.ts` fetches for API calls: the
+     * socket server verifies against its own secret, so the API token does not
+     * satisfy it. Called through `workflow.trigger`, which needs no bearer of
+     * its own — the platform session cookie authenticates it.
+     */
+    SOCKET_TOKEN_WF: "workflow.trigger/6a7eceb5f8dec4e8a9054b52",
+
+    /**
+     * Handshake token for the **legacy** socket server.
+     *
+     * A fixed value, not a user credential. That server verifies against its
+     * own secret, which is not the platform's — a platform JWT is refused with
+     * `invalid signature`. This exact string is what `sys/socketio/Socketio.php`
+     * sends, so it is already on the wire in every browser that opens the
+     * classic UI; identity is not carried here at all, it is established
+     * afterwards by the `vizru_user` event.
+     *
+     * It is a shared gate rather than authentication, and that is the platform's
+     * existing design rather than a choice made here.
+     */
+    SOCKET_HANDSHAKE_TOKEN:
+        process.env.NEXT_PUBLIC_SOCKET_HANDSHAKE_TOKEN ||
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmaXJzdF9uYW1lIjoiSm9obiIsImxhc3RfbmFtZSI6IkRvZSIsImVtYWlsIjoiam9obkBkb2UuY29tIn0.VecL2MImatj3_4y7I-y0sCoIOd3WPn86Z6ltQQ8fPwg",
+
+    /**
+     * Tenant id, used for the tenant-wide socket room.
+     *
+     * Not carried in the JWT, so it has to be configured. Leaving it unset only
+     * costs tenant-broadcast messages; a Realtime Push addressed to a user id
+     * still arrives, because that matches on the user rather than the tenant.
+     */
+    TENANT_ID: process.env.NEXT_PUBLIC_TENANT_ID || "11",
 } as const;

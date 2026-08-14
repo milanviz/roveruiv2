@@ -21,6 +21,8 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "sonner"
 import type { FilmAnalysisSection } from "@/lib/film-workflows"
+import { FILM_ANALYSIS_SECTIONS } from "@/lib/film-workflows"
+import { useVizruRealtime } from "@/lib/use-vizru-realtime"
 
 interface FilmWorkspaceProps {
   projectId: string
@@ -281,6 +283,51 @@ const FilmWorkspace = memo(function FilmWorkspace({
     }
   }
 
+  /** Apply a socket or REST payload to the right section. */
+  const applySectionPayload = (section: FilmAnalysisSection, payload: any) => {
+    const outputStr: unknown = payload?.output ?? payload
+    let parsed: Record<string, any> | null = null
+
+    if (outputStr && typeof outputStr === "string" && outputStr.trim() !== "") {
+      try { parsed = JSON.parse(outputStr) } catch { parsed = null }
+    } else if (outputStr && typeof outputStr === "object") {
+      parsed = outputStr as Record<string, any>
+    }
+
+    // Empty output from the server (e.g. story returned "") — mark as error
+    if (!parsed) {
+      setSectionErrors(prev => ({ ...prev, [section]: "No data returned for this section." }))
+      setLoadingSections(prev => ({ ...prev, [section]: false }))
+      inflightRef.current.delete(section)
+      return
+    }
+
+    setAnalysisReport((prev: any) => {
+      const next = { ...prev, ...parsed }
+      try { localStorage.setItem("temp_film_analysis", JSON.stringify(next)) } catch { }
+      return next
+    })
+    applyMetadata(parsed)
+    setReadySections(prev => {
+      const next = { ...prev, [section]: true }
+      readySectionsRef.current = next
+      return next
+    })
+    setLoadingSections(prev => ({ ...prev, [section]: false }))
+    inflightRef.current.delete(section)
+  }
+
+  // Subscribe to every section tag via the realtime socket.
+  // The backend pings back with the tag equal to the section name once the LLM finishes.
+  FILM_ANALYSIS_SECTIONS.forEach(section => {
+    // Rules of hooks: this is a stable array, so the hook count never changes.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useVizruRealtime(section, (payload: any) => {
+      console.log(`[FilmWorkspace] socket → ${section}`, payload)
+      applySectionPayload(section, payload)
+    })
+  })
+
   const analyzeSection = async (section: FilmAnalysisSection, force = false) => {
     if (!scriptId) return;
     
@@ -311,49 +358,30 @@ const FilmWorkspace = memo(function FilmWorkspace({
       });
     }
 
-    const promise = (async () => {
-      try {
-        const { fetchSummarizeWorkflow, buildSectionPrompt } = await import('@/lib/film-workflows');
-        
-        const prompt = buildSectionPrompt(section, {
-            title: metadata.title,
-            language: metadata.language,
-            genre: metadata.genre,
-            target_market: metadata.targetMarket,
-            release_strategy: metadata.releaseStrategy,
-            expected_budget: metadata.expectedBudget,
-        });
+    // Fire-and-forget: just trigger the workflow.
+    // The actual result arrives via the socket tag matching `section`.
+    inflightRef.current.set(section, Promise.resolve());
+    try {
+      const { fetchSummarizeWorkflow, buildSectionPrompt } = await import('@/lib/film-workflows');
+      
+      const prompt = buildSectionPrompt(section, {
+          title: metadata.title,
+          language: metadata.language,
+          genre: metadata.genre,
+          target_market: metadata.targetMarket,
+          release_strategy: metadata.releaseStrategy,
+          expected_budget: metadata.expectedBudget,
+      });
 
-        const raw = await fetchSummarizeWorkflow(fileUrlRef.current!, prompt);
-        
-        setAnalysisReport((prev: any) => {
-          const next = { ...prev, ...((raw as any) || {}) };
-          try {
-            localStorage.setItem("temp_film_analysis", JSON.stringify(next));
-          } catch(e) {}
-          return next;
-        });
-
-        if (raw) {
-          applyMetadata(raw as Record<string, any>);
-        }
-
-        setReadySections(prev => {
-          const next = { ...prev, [section]: true };
-          readySectionsRef.current = next;
-          return next;
-        });
-      } catch (err: any) {
-        console.error(`Analysis failed for ${section}:`, err);
-        setSectionErrors(prev => ({ ...prev, [section]: err.message || "Analysis failed" }));
-      } finally {
-        setLoadingSections(prev => ({ ...prev, [section]: false }));
-        inflightRef.current.delete(section);
-      }
-    })();
-
-    inflightRef.current.set(section, promise);
-    await promise;
+      // Trigger only — response is delivered via socket
+      await fetchSummarizeWorkflow(fileUrlRef.current!, prompt, section);
+    } catch (err: any) {
+      console.error(`Failed to trigger analysis for ${section}:`, err);
+      setSectionErrors(prev => ({ ...prev, [section]: err.message || "Failed to start analysis" }));
+      setLoadingSections(prev => ({ ...prev, [section]: false }));
+      inflightRef.current.delete(section);
+    }
+    // Loading stays true until the socket calls applySectionPayload
   }
 
   // Hydrate local cache and fetch live metadata
