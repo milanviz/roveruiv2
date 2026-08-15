@@ -1,283 +1,54 @@
 "use client"
 
-import { Card, GradientCard, CardContent } from "@/components/ui/card"
-import { Share2, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useLanguage } from "@/lib/language-context"
-import { useState, useEffect } from "react"
-import { GetProjectsController, ShareProject, ArchiveProjects } from "@/controllers/project-controller"
+import { useEffect } from "react"
+import { Image, useRouter } from "@/lib/spa-router"
+import { ASSET_PREFIX } from "@/lib/env"
 import { useProjectStore } from "@/app/store/project/project.store"
+import { GetProjectsController } from "@/controllers/project-controller"
 import type { ProjectType } from "@/types/project-types"
-import { UniversalPopup } from "./universal-popup"
-import Image from "next/image"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { RoverProjectCard } from "@/components/project-card"
+import { CardGridSkeleton, PageState, SectionHeader } from "@/components/ui/async-state"
 
 export default function DashboardContent() {
   const router = useRouter()
-  const { t } = useLanguage()
+  const { projects, projectsStatus, projectsError, AiAgentList, sahredUsers, setSelectedProject, setSelectedAiAgent } = useProjectStore()
 
-  // const [loading, setLoading] = useState<boolean>(true)
+  useEffect(() => { void GetProjectsController(); setSelectedAiAgent("") }, [setSelectedAiAgent])
 
-  const imageList = [
-    "/prject_default2.jpg",
-    "/prject_default3.jpg",
-    "/prject_default4.jpg",
-  ]
-
-
-  const currentUser = useProjectStore((state) => state.currentUser);
-  const projects = useProjectStore((state) => state.projects);
-  const AiAgentList = useProjectStore((state) => state.AiAgentList);
-  const setSelectedProject = useProjectStore((state) => state.setSelectedProject);
-  const setSelectedAiAgent = useProjectStore((state) => state.setSelectedAiAgent);
-  const sahredUsers = useProjectStore((state) => state.sahredUsers);
-
-  useEffect(() => {
-    GetProjectsController()
-    setSelectedAiAgent("")
-  }, [])
-
-  const handleAgentClick = async (aiAgent: string, agentId: string) => {
-    // Set the selected agent in store before navigating
-    await setSelectedAiAgent(agentId);
-    const slug = aiAgent.toLowerCase().replace(/\s+/g, "-")
-    const params = new URLSearchParams({
-      title: aiAgent,
-
-    })
-    router.push(`/projects/project-create?${params.toString()}`)
-  }
-
-  const handleProjectClick = async (project: ProjectType) => {
+  const openProject = async (project: ProjectType) => {
     setSelectedProject([project])
-
     try {
-      const res = await fetch("/api/film-projects/")
-      if (res.ok) {
-        const data = await res.json()
-        const match = (data.projects || []).find(
-          (p: any) => p.project_id === project.ProjectID || p.title === project.ProjectName
-        )
-        if (match?.script_id) {
-          router.push(`/projects/ask-rover?script_id=${encodeURIComponent(match.script_id)}&projectId=${project.ProjectID}`)
-          return
-        }
+      const response = await fetch("/api/film-projects/")
+      if (response.ok) {
+        const data = await response.json()
+        const match = (data.projects || []).find((item: any) => item.project_id === project.ProjectID)
+        if (match?.script_id) return router.push(`/projects/ask-rover?script_id=${encodeURIComponent(match.script_id)}&projectId=${encodeURIComponent(project.ProjectID)}`)
       }
-    } catch (e) {
-      console.error("Failed to resolve script_id for project:", e)
-    }
-
-    router.push(`/projects/ask-rover?projectId=${project.ProjectID}`)
+    } catch { /* project id remains a valid fallback */ }
+    router.push(`/projects/ask-rover?projectId=${encodeURIComponent(project.ProjectID)}`)
   }
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX || "";
+
   return (
-    <div className="flex flex-col h-full overflow-auto scrollbar-hide">
-      <div className="flex-1 p-8 space-y-12">
-        <div className="text-center space-y-3 mb-20 pt-8">
-          <h1 className="text-4xl m-0 font-medium text-foreground flex items-center justify-center gap-2">
-            <span><Image src={`${assetPrefix}/assets/images/hand.png`} alt="Waving Hand" width={46} height={46} /></span> <p className="text-gradient">Welcome!</p>
-          </h1>
-          <p className="text-[28px] text-lighttext font-extralight">What would you like to start with today?</p>
-        </div>
+    <div className="h-full overflow-y-auto scrollbar-hide">
+      <div className="page-container space-y-10 py-8 sm:space-y-12 sm:py-12">
+        <header className="text-center">
+          <h1 className="flex items-center justify-center gap-2 text-3xl font-medium sm:text-4xl"><Image src={`${ASSET_PREFIX}/assets/images/hand.png`} alt="" width={42} height={42} /><span className="text-gradient">Welcome!</span></h1>
+          <p className="mt-3 text-lg font-light text-lighttext sm:text-2xl">What would you like to start with today?</p>
+        </header>
 
-        <div className="max-w-[1400px] mx-auto">
-          <div className="mb-2 flex items-center gap-6">
-            <h2 className="text-xl font-none text-primary inline-block text-gradient pb-1 whitespace-nowrap">
-              Create Project
-            </h2>
-            <div className="flex-1 border-b-[1px] border-[#2B2B2B]"></div>
+        <section className="space-y-5">
+          <SectionHeader title="Create Project" />
+          <p className="text-lg font-light text-lighttext sm:text-xl">Choose an AI specialist</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {AiAgentList.map((agent) => <button type="button" key={agent.id} onClick={() => { setSelectedAiAgent(agent.id); router.push(`/projects/project-create?title=${encodeURIComponent(agent.title)}`) }} className="focus-ring rover-surface flex min-h-24 items-center gap-3 p-3 text-left transition hover:border-primary/50 hover:bg-primary/10"><span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-white/5"><Image src={`${ASSET_PREFIX}/assets/images/${agent.icon}`} alt="" width={42} height={42} /></span><span className="text-sm text-foreground">{agent.title}</span></button>)}
           </div>
-          <p className="text-[25px] text-lighttext font-extralight mb-8">Which AI Agent would you like to use?</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {AiAgentList.map((agent) => {
-              return (
-                <GradientCard
-                  key={agent.id}
-                  className={`
-                    ${agent.selected ? "card-bg-gradient" : "bg-[#0D0D0D]"} h-[92px] border-border hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer hover:card-bg-gradient
-                  `}
-                  onClick={() => handleAgentClick(agent.title, agent.id)}
-                >
-                  <CardContent className="p-3 h-full flex flex-row items-center gap-3">
-                    <div className="flex items-center justify-center w-[63px] h-[61px] shrink-0 p-2 rounded-[9px] bg-[#2F2E2E80]">
-                      <Image
-                        src={`${assetPrefix}/assets/images/${agent.icon}`}
-                        alt="Agent Icon"
-                        width={45}
-                        height={45}
-                        className="block"
-                      />
-                    </div>
+        </section>
 
-                    <div>
-                      <h3 className="font-light text-foreground text-base leading-tight">
-                        {agent.title}
-                      </h3>
-                    </div>
-                  </CardContent>
-                </GradientCard>
-
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="max-w-[1400px] mx-auto">
-          {projects.length > 0 && (            
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[12.07px] font-medium text-foreground uppercase tracking-wider">RECENT PROJECTS</h2>
-              <button
-                onClick={() => router.push("/projects")}
-                className="text-foreground hover:text-foreground/80 text-sm font-medium flex items-center gap-1 cursor-pointer"
-              >
-                VIEW ALL <span>→</span>
-              </button>
-            </div>
-          )}
-          <div className="relative">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.slice(0, 3).map((project, ind) => {
-                // Generate a random but consistent image index based on project ID
-                const getRandomImage = () => {
-                  let hash = 0
-                  for (let i = 0; i < project.ProjectID.length; i++) {
-                    hash = (hash << 5) - hash + project.ProjectID.charCodeAt(i)
-                    hash |= 0
-                  }
-                  return imageList[Math.abs(hash) % imageList.length]
-                }
-
-                return (
-                  <Card
-                    onClick={() => handleProjectClick(project)}
-                    key={ind}
-                    className="group relative bg-background border-border hover:shadow-lg transition-all cursor-pointer overflow-hidden"
-                  >
-                    <div className="flex h-[200px]">
-                      {/* Left side - Project image */}
-
-                      <div className="w-[100px] h-full flex-shrink-0 relative">
-                        <Image
-                          src={`${assetPrefix}/assets/images/` + getRandomImage()}
-                          alt={project.ProjectName}
-                          fill
-                          className="object-cover w-full h-full opacity-70"
-                        />
-                      </div>
-
-                      {/* Right side - Project details */}
-                      <div className="flex-1 pt-4 px-4 pb-2 flex flex-col">
-                        <div className="flex-1">
-                          <h3 className="font-normal text-foreground text-[15px] mb-2 line-clamp-2 leading-tight">
-                            {project.ProjectName}
-                          </h3>
-                          <div className="flex items-center gap-1 text-[13px] text-[#75A5ED] mb-3">
-                            <span className="inline-block">⚡</span>
-                            <span>{project.AIAgent}</span>
-                          </div>
-                          <p className="text-[13px] text-muted-foreground leading-relaxed">
-                            {new DOMParser()
-                              .parseFromString(project.Summary, "text/html")
-                              .body.textContent
-                              ?.slice(0, 75) + "..."}{/* limit to 120 chars */}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-3 border-t border-border mt-auto">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex -space-x-2">
-                                  {(sahredUsers[project.ProjectID] || []).slice(0, 3).map((name: string, idx: number) => {
-                                    const first = (name?.trim().charAt(0) ?? "").toUpperCase();
-                                    return (
-                                      <div
-                                        key={idx}
-                                        className="w-6 h-6 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-card flex items-center justify-center"
-                                      >
-                                        <span className="text-[10px] font-semibold text-primary">
-                                          {first}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="text-xs">
-                                  {(sahredUsers[project.ProjectID] || []).length > 0 ? (
-                                    <ul className="space-y-1">
-                                      {(sahredUsers[project.ProjectID] || []).map((name: string, idx: number) => (
-                                        <li key={idx}>{name}</li>
-                                      ))}
-                                    </ul>
-                                  ) : (
-                                    <p>No shared users</p>
-                                  )}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <div className="flex gap-1 ml-auto" onClick={(e) => e.stopPropagation()}>
-                            <div>
-                              <UniversalPopup
-                                mode="email"
-                                title="Share Project"
-                                description="Enter an email address to share the project."
-                                trigger={
-                                  <button className="
-                                    w-[31.29px] 
-                                    h-[31.29px] 
-                                    flex 
-                                    items-center 
-                                    justify-center 
-                                    rounded-full 
-                                    bg-[#201F1F]/50
-                                    hover:bg-secondary
-                                    text-icon-secondary 
-                                    hover:text-destructive 
-                                    cursor-pointer
-                                  " >
-                                    <span><Image src={`${assetPrefix}/assets/icons/share.svg`} alt="Rover Logo" width={14} height={14} /></span>
-                                  </button>
-                                }
-                                onSend={(email) => ShareProject(project.ProjectID, "adduser", email)}
-                              />
-                            </div>
-                            <UniversalPopup
-                              mode="delete"
-                              title="Delete Project?"
-                              description="This action cannot be undone."
-                              trigger={
-                                <button
-                                  className="w-[31.29px] h-[31.29px] flex items-center justify-center rounded-full bg-[#201F1F]/50 hover:bg-secondary text-icon-secondary hover:text-destructive cursor-pointer"
-                                >
-                                  <Image
-                                    src={`${assetPrefix}/assets/icons/archive.svg`}
-                                    alt="Archive Icon"
-                                    width={14}
-                                    height={14}
-                                  />
-                                </button>
-                              }
-                              onConfirm={async () => {
-                                await ArchiveProjects("Yes", "Archive", project.rowid ?? "");
-                                await GetProjectsController();
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Gradient underline on hover */}
-                    <div
-                      className="underline-gradient"></div>
-                  </Card>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+        <section className="space-y-4" aria-busy={projectsStatus === "loading"}>
+          <SectionHeader title="Recent Projects" action={projects.length > 0 ? <button className="focus-ring rounded-md px-2 py-1 text-xs text-foreground hover:text-primary" onClick={() => router.push("/projects")}>View all →</button> : undefined} />
+          {projectsStatus === "loading" && projects.length === 0 ? <CardGridSkeleton count={3} compact /> : projectsStatus === "error" && projects.length === 0 ? <PageState kind="error" title="Projects couldn’t be loaded" description={projectsError || undefined} onRetry={() => void GetProjectsController(true)} /> : projects.length === 0 ? <PageState title="No projects yet" description="Upload a screenplay above to create your first project." /> : <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{projects.slice(0, 3).map((project) => <RoverProjectCard key={project.ProjectID} project={project} compact sharedUsers={sahredUsers[project.ProjectID] || []} onOpen={() => void openProject(project)} onArchived={() => GetProjectsController(true)} />)}</div>}
+          {projectsStatus === "error" && projects.length > 0 && <p role="status" className="text-sm text-amber-300">Showing saved projects. Refresh failed: {projectsError}</p>}
+        </section>
       </div>
     </div>
   )

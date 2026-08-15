@@ -28,6 +28,11 @@ interface FilmWorkspaceProps {
   projectId: string
   scriptId?: string | null
   projectName: string
+  userId?: string | null
+  userEmail?: string | null
+  fileName?: string | null
+  fileUrl?: string | null
+  generateIfMissing?: boolean
   onAskRover: (question: string) => void
   activeTab: string
   setActiveTab: (tab: string) => void
@@ -42,6 +47,13 @@ const TAB_TO_SECTION: Record<string, FilmAnalysisSection> = {
   Development: "development",
   Greenlight: "greenlight",
 }
+
+const AUTO_GENERATED_SECTIONS: FilmAnalysisSection[] = ["overview", "story", "characters"]
+const MANUAL_GENERATED_SECTIONS: FilmAnalysisSection[] = ["commercial", "production", "development", "greenlight"]
+
+const SECTION_TO_TAB = Object.fromEntries(
+  Object.entries(TAB_TO_SECTION).map(([tab, section]) => [section, tab]),
+) as Record<FilmAnalysisSection, string>
 
 const SECTION_LABELS: Record<string, string> = {
   overview: "Overview & Readiness",
@@ -215,6 +227,11 @@ const FilmWorkspace = memo(function FilmWorkspace({
   projectId,
   scriptId,
   projectName,
+  userId,
+  userEmail,
+  fileName,
+  fileUrl,
+  generateIfMissing = false,
   onAskRover,
   activeTab,
   setActiveTab
@@ -234,11 +251,19 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const [sectionErrors, setSectionErrors] = useState<Record<string, string | null>>({})
   const [readySections, setReadySections] = useState<Record<string, boolean>>({})
   const [hydrated, setHydrated] = useState(false)
+  const [generationEnabled, setGenerationEnabled] = useState(false)
+  const [hydrationAttempt, setHydrationAttempt] = useState(0)
   
   const inflightRef = useRef<Map<string, Promise<void>>>(new Map())
+  const sectionPayloadsRef = useRef<Partial<Record<FilmAnalysisSection, Record<string, unknown>>>>({})
+  const dashboardSavedRef = useRef(false)
   const readySectionsRef = useRef(readySections)
   readySectionsRef.current = readySections
-  const fileUrlRef = useRef<string | null>(null)
+  const fileUrlRef = useRef<string | null>(fileUrl || null)
+
+  useEffect(() => {
+    if (fileUrl) fileUrlRef.current = fileUrl
+  }, [fileUrl])
 
   const applyMetadata = (parsed: Record<string, any>) => {
     setMetadata(prev => ({
@@ -254,34 +279,24 @@ const FilmWorkspace = memo(function FilmWorkspace({
     }))
   }
 
+  const persistPartialProgress = () => {
+    if (!projectId) return
+    try {
+      localStorage.setItem(`film_dashboard_progress_${projectId}`, JSON.stringify({
+        project_id: projectId,
+        file_full_url: fileUrlRef.current || "",
+        sections: sectionPayloadsRef.current,
+      }))
+    } catch (error) {
+      console.error("Failed to cache film dashboard progress:", error)
+    }
+  }
+
   useEffect(() => {
     if (projectName) {
       setMetadata(prev => ({ ...prev, title: projectName }));
     }
   }, [projectName]);
-
-  const markSectionsFromAnalysis = (analysis: any) => {
-    if (typeof analysis !== "object" || !analysis) return
-    const nextReady: Record<string, boolean> = {}
-    
-    // Naively assume if there is data for a section in the top level object, it's ready.
-    // E.g. if 'scores' exists, maybe overview and story are ready.
-    if (analysis.recommendation) nextReady.overview = true
-    if (analysis.storyScorecard) nextReady.story = true
-    if (analysis.charactersList) nextReady.characters = true
-    if (analysis.comparables) nextReady.commercial = true
-    if (analysis.productionSummary) nextReady.production = true
-    if (analysis.developmentNotes || analysis.rewriteNotes) nextReady.development = true
-    if (analysis.killRisks) nextReady.greenlight = true
-
-    if (Object.keys(nextReady).length) {
-      setReadySections(prev => {
-        const next = { ...prev, ...nextReady }
-        readySectionsRef.current = next
-        return next
-      })
-    }
-  }
 
   /** Apply a socket or REST payload to the right section. */
   const applySectionPayload = (section: FilmAnalysisSection, payload: any) => {
@@ -307,6 +322,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
       try { localStorage.setItem("temp_film_analysis", JSON.stringify(next)) } catch { }
       return next
     })
+    sectionPayloadsRef.current[section] = parsed
+    persistPartialProgress()
     applyMetadata(parsed)
     setReadySections(prev => {
       const next = { ...prev, [section]: true }
@@ -329,15 +346,15 @@ const FilmWorkspace = memo(function FilmWorkspace({
   })
 
   const analyzeSection = async (section: FilmAnalysisSection, force = false) => {
-    if (!scriptId) return;
-    
     if (!fileUrlRef.current) {
       // Try to fetch fileUrl if missing
-      try {
-        const { fetchMetadataWorkflow } = await import('@/lib/film-workflows');
-        const { fileUrl } = await fetchMetadataWorkflow(scriptId);
-        if (fileUrl) fileUrlRef.current = fileUrl;
-      } catch(e) {}
+      if (scriptId) {
+        try {
+          const { fetchMetadataWorkflow } = await import('@/lib/film-workflows');
+          const { fileUrl } = await fetchMetadataWorkflow(scriptId);
+          if (fileUrl) fileUrlRef.current = fileUrl;
+        } catch(e) {}
+      }
       
       if (!fileUrlRef.current) {
          setSectionErrors(prev => ({ ...prev, [section]: "Missing file URL for analysis." }));
@@ -351,6 +368,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
     setLoadingSections(prev => ({ ...prev, [section]: true }));
     setSectionErrors(prev => ({ ...prev, [section]: null }));
     if (force) {
+      dashboardSavedRef.current = false
+      delete sectionPayloadsRef.current[section]
+      persistPartialProgress()
       setReadySections(prev => {
         const next = { ...prev, [section]: false };
         readySectionsRef.current = next;
@@ -384,62 +404,196 @@ const FilmWorkspace = memo(function FilmWorkspace({
     // Loading stays true until the socket calls applySectionPayload
   }
 
-  // Hydrate local cache and fetch live metadata
+  // Load a saved dashboard before fetching metadata or triggering generation.
   useEffect(() => {
     let mounted = true;
+    const resolvedEmail = userEmail || localStorage.getItem("rover_user_email") || ""
+
+    setHydrated(false)
+    setGenerationEnabled(false)
+    setReadySections({})
+    readySectionsRef.current = {}
+    sectionPayloadsRef.current = {}
+    dashboardSavedRef.current = false
+    inflightRef.current.clear()
+    fileUrlRef.current = fileUrl || null
+    setAnalysisReport({})
+    setSectionErrors({})
+    setLoadingSections({})
+    setMetadata({
+      title: projectName || "",
+      language: "",
+      genre: "",
+      targetMarket: "",
+      releaseStrategy: "",
+      expectedBudget: "",
+      pages: 0,
+      runtimeMinutes: 0,
+    })
     
     try {
-      const tempMeta = localStorage.getItem("temp_film_metadata");
+      const tempMetaRaw = localStorage.getItem("temp_film_metadata");
+      const tempMeta = JSON.parse(tempMetaRaw || "null")
       if (tempMeta) {
-        const parsed = JSON.parse(tempMeta);
+        const parsed = tempMeta;
         if (parsed.scriptId === scriptId) {
           applyMetadata(parsed);
         }
       }
-      
+
       const tempAnalysis = localStorage.getItem("temp_film_analysis");
-      if (tempAnalysis) {
+      const belongsToCurrentProject =
+        tempMeta?.projectId === projectId || (scriptId && tempMeta?.scriptId === scriptId)
+      if (tempAnalysis && belongsToCurrentProject) {
         const parsed = JSON.parse(tempAnalysis);
         setAnalysisReport(parsed);
-        markSectionsFromAnalysis(parsed);
       }
     } catch(e) {}
     
-    if (scriptId) {
-      import('@/lib/film-workflows').then(({ fetchMetadataWorkflow }) => {
-        fetchMetadataWorkflow(scriptId).then(({ metadata: meta, fileUrl }) => {
-          if (!mounted) return;
-          if (meta) applyMetadata(meta as Record<string, any>);
-          if (fileUrl) fileUrlRef.current = fileUrl;
-          setHydrated(true);
-        }).catch(err => {
-          console.error("Live metadata fetch failed:", err);
-          if (mounted) setHydrated(true);
-        });
-      });
-    } else {
-      setHydrated(true);
+    const hydrate = async () => {
+      const workflows = await import('@/lib/film-workflows')
+      const applySavedDashboard = (saved: Awaited<ReturnType<typeof workflows.fetchSavedFilmDashboard>>) => {
+        if (!saved) return false
+        sectionPayloadsRef.current = saved.sections
+        dashboardSavedRef.current = true
+        setGenerationEnabled(false)
+        if (saved.file_full_url) fileUrlRef.current = saved.file_full_url
+        const merged = Object.assign({}, ...FILM_ANALYSIS_SECTIONS.map((section) => saved.sections[section]))
+        setAnalysisReport(merged)
+        FILM_ANALYSIS_SECTIONS.forEach((section) => applyMetadata(saved.sections[section]))
+        const complete = Object.fromEntries(
+          FILM_ANALYSIS_SECTIONS.map((section) => [section, true]),
+        )
+        setReadySections(complete)
+        readySectionsRef.current = complete
+        setHydrated(true)
+        return true
+      }
+
+      const applyPartialProgress = (progress: any) => {
+        if (!progress?.sections || typeof progress.sections !== "object") return false
+        const availableSections = FILM_ANALYSIS_SECTIONS.filter((section) => {
+          const value = progress.sections[section]
+          return value && typeof value === "object" && !Array.isArray(value)
+        })
+        if (availableSections.length === 0) return false
+        sectionPayloadsRef.current = Object.fromEntries(
+          availableSections.map((section) => [section, progress.sections[section]]),
+        )
+        if (progress.file_full_url) fileUrlRef.current = progress.file_full_url
+        const merged = Object.assign({}, ...availableSections.map((section) => progress.sections[section]))
+        setAnalysisReport(merged)
+        availableSections.forEach((section) => applyMetadata(progress.sections[section]))
+        const complete = Object.fromEntries(availableSections.map((section) => [section, true]))
+        setReadySections(complete)
+        readySectionsRef.current = complete
+        return true
+      }
+
+      let savedLookupError: unknown = null
+      try {
+        const saved = await workflows.fetchSavedFilmDashboard(
+          resolvedEmail,
+          projectId,
+          hydrationAttempt > 0,
+        )
+        if (!mounted) return
+        if (applySavedDashboard(saved)) return
+      } catch (error) {
+        savedLookupError = error
+        console.error("Saved dashboard lookup failed:", error)
+      }
+
+      // Preserve the no-regeneration behavior in this browser if the remote
+      // read workflow is temporarily unavailable.
+      try {
+        const cached = JSON.parse(localStorage.getItem(`film_dashboard_${projectId}`) || "null")
+        if (mounted && applySavedDashboard(cached)) return
+      } catch (error) {
+        console.error("Cached dashboard lookup failed:", error)
+      }
+
+      try {
+        const progress = JSON.parse(localStorage.getItem(`film_dashboard_progress_${projectId}`) || "null")
+        if (mounted) applyPartialProgress(progress)
+      } catch (error) {
+        console.error("Partial dashboard progress lookup failed:", error)
+      }
+
+      if (generateIfMissing && scriptId) {
+        try {
+          const result = await workflows.fetchMetadataWorkflow(scriptId)
+          if (!mounted) return
+          if (result.metadata) applyMetadata(result.metadata as Record<string, any>)
+          if (result.fileUrl) fileUrlRef.current = result.fileUrl
+        } catch (error) {
+          console.error("Live metadata fetch failed:", error)
+        }
+      }
+      if (!mounted) return
+
+      if (generateIfMissing) {
+        setGenerationEnabled(true)
+      } else {
+        const message = savedLookupError
+          ? "Could not load this project's saved analysis. Retry after the connection is restored."
+          : "No saved analysis exists for this project."
+        setSectionErrors(Object.fromEntries(
+          FILM_ANALYSIS_SECTIONS.map((section) => [section, message]),
+        ))
+      }
+      setHydrated(true)
     }
-    
+
+    hydrate()
+
     return () => { mounted = false; };
-  }, [scriptId, projectId, projectName])
+  }, [scriptId, projectId, projectName, userEmail, fileUrl, generateIfMissing, hydrationAttempt])
 
-  // Fire ALL section analyses in parallel once hydration completes.
-  // This preloads every tab so results are ready when the user switches.
-  const allSectionsFiredRef = useRef(false)
+  // Generate only the first three dashboards automatically, in strict order.
+  // The remaining dashboards require an explicit user action below.
   useEffect(() => {
-    if (!hydrated || allSectionsFiredRef.current) return
-    allSectionsFiredRef.current = true
+    if (!hydrated || !generationEnabled || inflightRef.current.size > 0) return
+    const nextSection = AUTO_GENERATED_SECTIONS.find(
+      (section) => !readySectionsRef.current[section],
+    )
+    if (nextSection) analyzeSection(nextSection)
+  }, [hydrated, generationEnabled, readySections]);
 
-    const allSections: FilmAnalysisSection[] = [
-      "overview", "story", "characters", "commercial",
-      "production", "development", "greenlight",
-    ]
-    // Fire all concurrently — each call is independently guarded by inflightRef
-    allSections.forEach(section => {
-      analyzeSection(section)
+  // Persist once, after all seven socket responses have filled the dashboard.
+  useEffect(() => {
+    if (!hydrated || dashboardSavedRef.current || !projectId) return
+    const complete = FILM_ANALYSIS_SECTIONS.every(
+      (section) => readySections[section] && sectionPayloadsRef.current[section],
+    )
+    if (!complete || !fileUrlRef.current) return
+
+    const resolvedEmail = userEmail || localStorage.getItem("rover_user_email") || ""
+    const resolvedUserId = userId || localStorage.getItem("rover_user_id") || ""
+    if (!resolvedEmail || !resolvedUserId) return
+
+    const completedDashboard = {
+      user_id: resolvedUserId,
+      user_email: resolvedEmail,
+      project_id: projectId,
+      file_name: fileName || metadata.title || projectName,
+      file_full_url: fileUrlRef.current || "",
+      sections: sectionPayloadsRef.current as Record<FilmAnalysisSection, Record<string, unknown>>,
+    }
+    try {
+      localStorage.setItem(`film_dashboard_${projectId}`, JSON.stringify(completedDashboard))
+    } catch (error) {
+      console.error("Failed to cache completed film dashboard:", error)
+    }
+
+    dashboardSavedRef.current = true
+    import('@/lib/film-workflows').then(({ saveFilmDashboard }) =>
+      saveFilmDashboard(completedDashboard),
+    ).catch((error) => {
+      dashboardSavedRef.current = false
+      console.error("Failed to save completed film dashboard:", error)
     })
-  }, [hydrated]);
+  }, [readySections, hydrated, projectId, userId, userEmail, fileName, metadata.title, projectName])
 
   const handleSaveToInsights = (item: { Key: string; Question: string; Answer: string; Tags: string }) => {
     if (typeof window !== "undefined") {
@@ -490,6 +644,13 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const sectionLoading = activeSection ? !!loadingSections[activeSection] : false
   const sectionError = activeSection ? sectionErrors[activeSection] || null : null
   const sectionReady = activeSection ? !!readySections[activeSection] : true
+  const readyDashboardCount = FILM_ANALYSIS_SECTIONS.filter((section) => readySections[section]).length
+  const automaticDashboardsReady = AUTO_GENERATED_SECTIONS.every((section) => !!readySections[section])
+  const allDashboardsReady = hydrated && FILM_ANALYSIS_SECTIONS.every((section) => !!readySections[section])
+
+  useEffect(() => {
+    if (activeTab === "Ask Rover" && !allDashboardsReady) setActiveTab("Overview")
+  }, [activeTab, allDashboardsReady, setActiveTab])
 
   // --- DATA (Fallback to empty states if not yet analyzed) ---
   const recommendation = analysisReport?.recommendation || {
@@ -631,25 +792,36 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const synopsis = analysisReport?.synopsis || ""
 
   const retryActiveSection = () => {
+    if (!generationEnabled && !sectionReady) {
+      setHydrationAttempt((attempt) => attempt + 1)
+      return
+    }
     if (activeSection) analyzeSection(activeSection, true)
   }
 
   // --- RENDERING TABS ---
 
   return (
-    <div className="flex flex-col flex-1 h-full overflow-hidden bg-transparent">
+    <div className={`flex flex-col overflow-hidden bg-transparent ${activeTab === "Ask Rover" ? "h-auto shrink-0" : "h-full flex-1"}`}>
       {/* Dynamic Tab Selector */}
-      <div className="px-8 pb-3 border-b border-border flex items-center justify-between flex-wrap gap-4 bg-[#0a0a0a]/80 sticky top-0 z-10 backdrop-blur-md">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide py-1">
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-[#0a0a0a]/80 px-4 pb-3 backdrop-blur-md sm:px-6 lg:px-8">
+        <div className="scrollbar-hide flex min-w-0 flex-1 gap-2 overflow-x-auto py-1">
           {["Overview", "Story", "Characters", "Commercial", "Production", "Development", "Greenlight"].map(tab => {
             const sec = TAB_TO_SECTION[tab]
-            const busy = !!(scriptId && loadingSections[sec] && !readySections[sec])
+            const busy = !!(loadingSections[sec] && !readySections[sec])
+            const unavailable = !readySections[sec]
             return (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg text-sm transition-all flex-shrink-0 flex items-center cursor-pointer font-medium relative ${
-                  activeTab === tab
+                disabled={unavailable}
+                aria-disabled={unavailable}
+                aria-current={activeTab === tab ? "page" : undefined}
+                title={unavailable ? busy ? `${tab} dashboard is being generated` : `${tab} dashboard is not generated yet` : `Open ${tab} dashboard`}
+                className={`focus-ring min-h-10 px-4 py-2 rounded-lg text-sm transition-all flex-shrink-0 flex items-center cursor-pointer font-medium relative ${
+                  unavailable
+                    ? "cursor-not-allowed border border-transparent text-muted-foreground/35 opacity-60"
+                    : activeTab === tab
                     ? "bg-secondary text-[#75A5ED] border border-border"
                     : "border border-transparent text-muted-foreground hover:text-foreground hover:bg-[#1a1a1f]/50"
                 }`}
@@ -670,19 +842,49 @@ const FilmWorkspace = memo(function FilmWorkspace({
 
         <button
           onClick={() => setActiveTab("Ask Rover")}
-          className={`px-4 py-2 rounded-lg text-sm transition-all flex items-center gap-2 cursor-pointer font-medium border border-border/80 ${
-            activeTab === "Ask Rover"
+          disabled={!allDashboardsReady}
+          aria-disabled={!allDashboardsReady}
+          title={allDashboardsReady ? "Ask AI about this film" : `Ask AI unlocks when all dashboards are generated (${readyDashboardCount}/${FILM_ANALYSIS_SECTIONS.length})`}
+          className={`focus-ring min-h-10 shrink-0 px-3 sm:px-4 py-2 rounded-lg text-sm transition-all flex items-center gap-2 cursor-pointer font-medium border border-border/80 ${
+            !allDashboardsReady
+              ? "cursor-not-allowed bg-secondary/50 text-muted-foreground/35 opacity-60"
+              : activeTab === "Ask Rover"
               ? "bg-[#75A5ED]/20 text-[#75A5ED]"
               : "bg-secondary text-foreground hover:bg-muted"
           }`}
         >
-          <Sparkles className="w-4 h-4 text-[#75A5ED]" />
-          Ask AI
+          {allDashboardsReady ? <Sparkles className="w-4 h-4 text-[#75A5ED]" /> : <Loader2 className="w-4 h-4 animate-spin" />}
+          <span className="hidden sm:inline">Ask AI</span>
         </button>
       </div>
 
+      {hydrated && generationEnabled && automaticDashboardsReady && !allDashboardsReady && (
+        <div className="border-b border-border bg-[#0a0a0a]/65 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs text-muted-foreground">Generate remaining dashboards:</span>
+            {MANUAL_GENERATED_SECTIONS.filter((section) => !readySections[section]).map((section) => {
+              const busy = !!loadingSections[section]
+              const anotherSectionIsRunning = inflightRef.current.size > 0 && !busy
+              const label = SECTION_TO_TAB[section]
+              return (
+                <button
+                  key={section}
+                  onClick={() => analyzeSection(section)}
+                  disabled={busy || anotherSectionIsRunning}
+                  title={sectionErrors[section] || `Generate the ${label} dashboard`}
+                  className="focus-ring flex min-h-9 items-center gap-1.5 rounded-lg border border-[#75A5ED]/25 bg-[#75A5ED]/10 px-3 py-1.5 text-xs font-medium text-[#8cb6f4] transition hover:bg-[#75A5ED]/20 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  {busy ? `Generating ${label}…` : `Generate ${label}`}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Main Tab Panels */}
-      <div className="flex-1 overflow-y-auto scrollbar-custom px-8 py-6">
+      {activeTab !== "Ask Rover" && <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-custom px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
         <div className="max-w-[1100px] mx-auto space-y-8 pb-20">
           
           {/* TAB 1: OVERVIEW */}
@@ -825,9 +1027,11 @@ const FilmWorkspace = memo(function FilmWorkspace({
                     </div>
 
                     <div className="pt-2">
-                      <button 
+                      <button
                         onClick={() => onAskRover(`Why is the expected budget estimated at ${metadata.expectedBudget} for this film?`)}
-                        className="w-full py-2 bg-secondary hover:bg-muted text-xs rounded border border-border text-center text-[#75A5ED] font-medium flex items-center justify-center gap-1.5 cursor-pointer"
+                        disabled={!allDashboardsReady}
+                        title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
+                        className="w-full py-2 bg-secondary hover:bg-muted text-xs rounded border border-border text-center text-[#75A5ED] font-medium flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Sparkles className="w-3.5 h-3.5" /> Ask Rover about Budget
                       </button>
@@ -1096,7 +1300,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
                 </div>
                 <button
                   onClick={() => onAskRover(`Compare the character goals and motivations in ${metadata.title}.`)}
-                  className="px-3 py-1.5 bg-[#75A5ED]/20 hover:bg-[#75A5ED]/30 text-xs text-[#75A5ED] rounded border border-[#75A5ED]/30 flex items-center gap-1.5 cursor-pointer font-medium"
+                  disabled={!allDashboardsReady}
+                  title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
+                  className="px-3 py-1.5 bg-[#75A5ED]/20 hover:bg-[#75A5ED]/30 text-xs text-[#75A5ED] rounded border border-[#75A5ED]/30 flex items-center gap-1.5 cursor-pointer font-medium disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Sparkles className="w-3.5 h-3.5" /> Analyze Goals Comparison
                 </button>
@@ -1175,7 +1381,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
                       </button>
                       <button
                         onClick={() => onAskRover(`How does ${char.name}'s character arc evolve through the screenplay?`)}
-                        className="text-[10px] text-slate-400 hover:text-foreground flex items-center gap-1 cursor-pointer"
+                        disabled={!allDashboardsReady}
+                        title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
+                        className="text-[10px] text-slate-400 hover:text-foreground flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <span>Ask Rover</span> <ArrowRight className="w-3 h-3" />
                       </button>
@@ -1492,7 +1700,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
                 </div>
                 <button
                   onClick={() => onAskRover(`Turn the top critical development note for ${metadata.title} into a detailed rewrite outline.`)}
-                  className="px-3 py-1.5 bg-[#75A5ED]/20 hover:bg-[#75A5ED]/30 text-xs text-[#75A5ED] rounded border border-[#75A5ED]/30 flex items-center gap-1.5 cursor-pointer font-medium"
+                  disabled={!allDashboardsReady}
+                  title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
+                  className="px-3 py-1.5 bg-[#75A5ED]/20 hover:bg-[#75A5ED]/30 text-xs text-[#75A5ED] rounded border border-[#75A5ED]/30 flex items-center gap-1.5 cursor-pointer font-medium disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Sparkles className="w-3.5 h-3.5" /> Generate Rewrite Outline
                 </button>
@@ -1549,7 +1759,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
                       </button>
                       <button
                         onClick={() => onAskRover(`What specific changes can we make to resolve: "${note.title}"?`)}
-                        className="text-[10px] text-slate-400 hover:text-foreground flex items-center gap-1 cursor-pointer"
+                        disabled={!allDashboardsReady}
+                        title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
+                        className="text-[10px] text-slate-400 hover:text-foreground flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <span>Ask Rover to Rewrite</span> <ArrowRight className="w-3 h-3" />
                       </button>
@@ -1631,7 +1843,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
                   
                   <button
                     onClick={() => onAskRover("Summarize the entire Greenlight report into a 500-word executive brief for producers.")}
-                    className="px-4 py-2 bg-secondary border border-border text-foreground hover:bg-muted text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer"
+                    disabled={!allDashboardsReady}
+                    title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
+                    className="px-4 py-2 bg-secondary border border-border text-foreground hover:bg-muted text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Sparkles className="w-4 h-4 text-[#75A5ED]" /> Briefing
                   </button>
@@ -1733,7 +1947,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
           )}
 
         </div>
-      </div>
+      </div>}
     </div>
   )
 })

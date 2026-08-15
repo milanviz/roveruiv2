@@ -7,6 +7,10 @@ export interface ProjectType {
     CreatedOn?: string;
     rowid?: string;
     questions?: string | Record<string, string[]>;
+    user_id?: string;
+    user_email?: string;
+    file_name?: string;
+    file_full_url?: string;
 }
 
 // export interface ShareProjectResponse {

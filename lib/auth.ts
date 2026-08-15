@@ -15,7 +15,11 @@ const STORAGE_KEYS = {
     LS_ID: "rover_ls_id",
     USER_EMAIL: "rover_user_email",
     LOGIN_USERNAME: "rover_login_username",
+    FETCHED_AT: "rover_token_fetched_at",
 };
+
+const AUTH_TTL_MS = 30 * 60 * 1000;
+let authRequest: Promise<AuthData> | null = null;
 
 export const fetchJWTToken = async (): Promise<AuthData> => {
     try {
@@ -46,11 +50,12 @@ export const fetchJWTToken = async (): Promise<AuthData> => {
         // Store in localStorage
         if (typeof window !== "undefined") {
 
-            localStorage.setItem(STORAGE_KEYS.TOKEN, token);
-            localStorage.setItem(STORAGE_KEYS.USER_ID, userId);
-            localStorage.setItem(STORAGE_KEYS.LS_ID, lsId);
-            localStorage.setItem(STORAGE_KEYS.USER_EMAIL, userEmail);
-            localStorage.setItem(STORAGE_KEYS.LOGIN_USERNAME, loginUserName);
+            if (token) localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+            if (userId) localStorage.setItem(STORAGE_KEYS.USER_ID, userId);
+            if (lsId) localStorage.setItem(STORAGE_KEYS.LS_ID, lsId);
+            if (userEmail) localStorage.setItem(STORAGE_KEYS.USER_EMAIL, userEmail);
+            if (loginUserName) localStorage.setItem(STORAGE_KEYS.LOGIN_USERNAME, loginUserName);
+            if (token) localStorage.setItem(STORAGE_KEYS.FETCHED_AT, String(Date.now()));
         }
 
         return { token, userId, lsId, userEmail, loginUserName };
@@ -77,6 +82,15 @@ export const getAuthFromStorage = (): AuthData => {
     };
 };
 
-export const refreshAuthToken = async (): Promise<AuthData> => {
-    return await fetchJWTToken();
+export const refreshAuthToken = async (force = false): Promise<AuthData> => {
+    if (!force && typeof window !== "undefined") {
+        const cached = getAuthFromStorage();
+        const fetchedAt = Number(localStorage.getItem(STORAGE_KEYS.FETCHED_AT) || "0");
+        if (cached.token && Date.now() - fetchedAt < AUTH_TTL_MS) return cached;
+    }
+    if (authRequest) return authRequest;
+    authRequest = fetchJWTToken().finally(() => {
+        authRequest = null;
+    });
+    return authRequest;
 };

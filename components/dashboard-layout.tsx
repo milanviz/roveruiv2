@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/spa-router"
 import MiniSidebar from "./mini-sidebar"
 import Sidebar from "./sidebar"
 import Topbar from "./topbar"

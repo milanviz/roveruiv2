@@ -9,10 +9,14 @@ export const useAskRoverStore = create<AskRoverStore>()(
         (set) => ({
             insightsList: [],
             afterStreaming: null,
+            insightsStatus: "idle",
+            insightsError: null,
             // hydrated: false,   
 
             setInsightsList: (list) => set({ insightsList: list }),
             setAfterStreaming: (value) => set(() => ({ afterStreaming: value })),
+            setInsightsStatus: (insightsStatus) => set({ insightsStatus }),
+            setInsightsError: (insightsError) => set({ insightsError }),
             // setHydrated: () => set({ hydrated: true }),
         }),
         {

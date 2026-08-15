@@ -2,21 +2,15 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import Link from "next/link"
-import Image from "next/image"
-import { Menu, Bell, Zap, ChevronDown, Check, Pen, X } from "lucide-react"
+import { Image, Link } from "@/lib/spa-router"
+import { Menu, Check } from "lucide-react"
 import { useLanguage } from "@/lib/language-context"
 import { useProjectStore } from "@/app/store/project/project.store"
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogPortal,
-  AlertDialogOverlay,
-} from "@/components/ui/alert-dialog"
-import StripePaymentPlan from "@/components/stripe-payment-plan"
+import { ASSET_PREFIX } from "@/lib/env"
 
 interface TopbarProps {
   onMenuClick: () => void
+  menuOpen?: boolean
 }
 
 const languages = [
@@ -24,12 +18,11 @@ const languages = [
   { code: "ja", name: "Japanese", flag: "/assets/images/japan.png" },
 ]
 
-export default function Topbar({ onMenuClick }: TopbarProps) {
+export default function Topbar({ onMenuClick, menuOpen = false }: TopbarProps) {
   const { language, setLanguage, t } = useLanguage()
   const [isLanguageOpen, setIsLanguageOpen] = useState(false)
-  const [isPaymentPopupOpen, setIsPaymentPopupOpen] = useState(false)
   const [curUserData, setCurUserData] = useState({ email: "", user: "" });
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX || "";
+  const assetPrefix = ASSET_PREFIX;
   const selectedLanguage = languages.find((lang) => lang.code === language) || languages[0]
 
   const { currentUser } = useProjectStore();
@@ -53,12 +46,13 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   }
 
   return (
-    <header className="bg-sidebar border-b border-border h-[61px] px-6 flex items-center justify-between flex-shrink-0">
+    <header className="bg-sidebar/95 border-b border-border h-[61px] px-4 sm:px-6 flex items-center justify-between flex-shrink-0 backdrop-blur-xl">
       {/* Left Section */}
       <div className="flex items-center gap-4">
         <button
           onClick={onMenuClick}
-          className="p-2 hover:bg-secondary rounded-lg transition-colors text-sidebar-foreground md:hidden cursor-pointer"
+          className="focus-ring flex size-11 items-center justify-center hover:bg-secondary rounded-lg transition-colors text-sidebar-foreground md:hidden cursor-pointer"
+          aria-expanded={menuOpen}
           aria-label="Toggle menu"
         >
           <Menu size={20} />
@@ -102,32 +96,6 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             </>
           )}
         </div>
-
-        {/* Payment Popup */}
-        <AlertDialog open={isPaymentPopupOpen} onOpenChange={setIsPaymentPopupOpen}>
-          <AlertDialogPortal>
-            <AlertDialogOverlay />
-            <AlertDialogContent className="max-w-[1000px] w-[95vw] h-[90vh]  p-0 overflow-hidden">
-              {/* Close Button */}
-              <button
-                onClick={() => setIsPaymentPopupOpen(false)}
-                className="absolute right-4 top-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </button>
-
-              {/* Payment Component */}
-              <div className="h-full overflow-auto">
-                <StripePaymentPlan onClose={() => setIsPaymentPopupOpen(false)} />
-              </div>
-            </AlertDialogContent>
-          </AlertDialogPortal>
-        </AlertDialog>
-
-
-
-
 
         {/* <button
           className="p-2 hover:bg-sidebar-accent rounded-lg transition-colors text-sidebar-foreground"

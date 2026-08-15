@@ -1,4 +1,5 @@
-import Image from "next/image"
+import { Image } from "@/lib/spa-router"
+import { ASSET_PREFIX } from "@/lib/env"
 
 interface CustomButtonProps {
     disable: boolean;
@@ -8,7 +9,7 @@ interface CustomButtonProps {
 }
 
 const CustomButton = ({ disable, handleFN, btnTitle, isLoading = false }: CustomButtonProps) => {
-    const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX || "";
+    const assetPrefix = ASSET_PREFIX;
 
     return (
         <button

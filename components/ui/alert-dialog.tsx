@@ -35,7 +35,7 @@ const AlertDialogContent = React.forwardRef<
         <AlertDialogPrimitive.Content
             ref={ref}
             className={cn(
-                "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg bg-background p-6 shadow-lg animate-in fade-in-90 zoom-in-90 rounded-md border",
+                "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border border-white/10 bg-[#131315] p-5 shadow-2xl animate-in fade-in-90 zoom-in-90 sm:p-6",
                 className
             )}
             {...props}
@@ -50,7 +50,7 @@ const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDiv
 AlertDialogHeader.displayName = "AlertDialogHeader"
 
 const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+    <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />
 )
 AlertDialogFooter.displayName = "AlertDialogFooter"
 
@@ -97,7 +97,7 @@ const AlertDialogCancel = React.forwardRef<
     <AlertDialogPrimitive.Cancel
         ref={ref}
         className={cn(
-            "inline-flex justify-center rounded-md border px-4 py-2 hover:bg-muted text-white cursor-pointer",
+            "focus-ring inline-flex min-h-10 justify-center rounded-lg border px-4 py-2 hover:bg-muted text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
             className
         )}
         {...props}

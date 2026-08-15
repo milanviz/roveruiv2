@@ -1,6 +1,7 @@
 "use client";
 
 import { Workflow } from "lucide-react";
+import { ENV } from "@/lib/env";
 
 const getOrigin = () => {
     if (typeof window !== "undefined") {
@@ -10,27 +11,34 @@ const getOrigin = () => {
 };
 
 const origin = getOrigin();
+const isLocalOrigin = origin.includes("localhost") || origin.includes("127.0.0.1");
+const configuredPublicApiUrl = ENV.PUBLIC_API_URL
+  ? `${ENV.PUBLIC_API_URL.replace(/\/$/, "")}/`
+  : undefined;
 const PYTHON_API_BASE_URL = "https://roverv2-qa.vizru-ras.com"
 export const APP_CONFIG = {
     PUBLIC_API_URL:
-        origin.includes("localhost") || origin.includes("v0.app")
+        isLocalOrigin
+            ? "/vizru-api/"
+            : configuredPublicApiUrl || (origin.includes("v0.app")
             ? "https://ai-demo.vizru-ras.com/"
             : typeof window !== "undefined"
                 ? "/"
-                : "",
-    PROJECT_LIST_WF: "workflow.exec/roverv2getprojectlistforgetstarteddashboard692945aec2c62", //roverprojectlistforgetstarteddashboardchild67e68a347bae6",
+                : ""),
+    // Database-backed user/project workflows. The URLs shared in the Vizru UI
+    // use hash routes (`#workflow.trigger/...` / `#workflow.debugger/...`). A
+    // URL fragment is never sent in an HTTP request, so fetch must use the
+    // callable workflow.trigger path and the workflow id.
+    USER_DETAILS_WF: "workflow.trigger/6a808ee4c2d02f1db00f8ee3",
+    PROJECT_LIST_WF: "workflow.trigger/6a8091a187061342c60acce2",
     SHARE_PROJECT_WF: "workflow.exec/roverprojectshare664dbc92c3028",
     ARCHIVE_PROJECT_WF: "workflow.exec/roverprojectarchive66603dce19f00",
-    CHAT_HISTORY_WF: "workflow.exec/roverv2getquestionsagainstproject69259c1d9e29e",
+    CHAT_HISTORY_WF: "workflow.trigger/6a80c45a6887dec5dc0bbc88",
 
     GET_INSIGHTS_WF: "workflow.exec/roverv2getmyinsights692431386908a",
     ADD_TO_INSIGHTS_WF: "workflow.exec/roverv2voting695e06fb20368",
     ARCHIVE_INSIGHT_WF: "workflow.exec/rovermyinsightsarchiveunarchive670ce78016abf",
     EXPORT_INSIGHTS_WF: "workflow.exec/roverexporttopdfbackground66fa922e0d4d9",
-    // payment Workflow
-    CREATE_SESSION_WF: "workflow.exec/createstripecheckoutsession68faedae08428",
-    PAYMENT_MAIL_WF: "workflow.exec/paymentmail68f739f37c403",
-    PRICING_DETAILS_WF: "workflow.exec/roverv2stripepaymentdetails695f4afdd30a0",
     // File preview
     FILE_PREVIEW_WF: "workflow.exec/roverv2filepreview6960c18d1c5ad",
     //Beat workflow
@@ -46,17 +54,25 @@ export const APP_CONFIG = {
 
     PUBLIC_CHAT_API_URL: PYTHON_API_BASE_URL + "/ask-rover",
 
+    // Ask Rover text agent. The workflow response is also pushed incrementally
+    // over the platform socket as `agent_stream` payloads.
+    ASK_ROVER_CHAT_WF: "workflow.trigger/6a75d645d22b6778627fdfd2",
+
     INSIGHTS_PUBLIC_CHAT_API_URL: PYTHON_API_BASE_URL + "/ask-insight",
 
     PYTHON_API_BASE_URL,
 
-    CREATE_PROJECT_WF: "workflow.exec/rovercreateprojectforgetstarted67efdd66a4730",
+    CREATE_PROJECT_WF: "workflow.trigger/6a8092676a4c74d61e08e6e2",
+    SAVE_FILM_DASHBOARD_WF: "workflow.trigger/6a809e65547065464e019593",
+    GET_FILM_DASHBOARD_WF: "workflow.trigger/6a80acced616afc2d905109d",
 
-    AFTER_MESSAGE_RECEIVE_WF: "workflow.trigger/roverv2rovermainquery692562863e860",
+    AFTER_MESSAGE_RECEIVE_WF: "workflow.trigger/6a80c8c32b3b61a48101e458",
 
     TRANSLATE_WF: "workflow.exec/rovertranslatetext6655997db8938",
 
-    ORIGIN_URL: origin.includes("localhost") || origin.includes("v0.app")
+    ORIGIN_URL: isLocalOrigin
+        ? "https://ai-demo.vizru-ras.com/"
+        : origin.includes("v0.app")
         ? "https://ai-demo.vizru-ras.com/"
         : typeof window !== "undefined"
             ? origin
@@ -73,7 +89,7 @@ export const APP_CONFIG = {
      * URL. It is what the platform calls `ExternalSocketServer`.
      */
     SOCKET_URL:
-        process.env.NEXT_PUBLIC_SOCKET_URL || "https://chat-react-app.vizru-ras.com",
+        ENV.SOCKET_URL || "https://chat-react-app.vizru-ras.com",
 
     /**
      * Mints the JWT the socket handshake is authenticated with.
@@ -99,7 +115,7 @@ export const APP_CONFIG = {
      * existing design rather than a choice made here.
      */
     SOCKET_HANDSHAKE_TOKEN:
-        process.env.NEXT_PUBLIC_SOCKET_HANDSHAKE_TOKEN ||
+        ENV.SOCKET_HANDSHAKE_TOKEN ||
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmaXJzdF9uYW1lIjoiSm9obiIsImxhc3RfbmFtZSI6IkRvZSIsImVtYWlsIjoiam9obkBkb2UuY29tIn0.VecL2MImatj3_4y7I-y0sCoIOd3WPn86Z6ltQQ8fPwg",
 
     /**
@@ -109,5 +125,5 @@ export const APP_CONFIG = {
      * costs tenant-broadcast messages; a Realtime Push addressed to a user id
      * still arrives, because that matches on the user rather than the tenant.
      */
-    TENANT_ID: process.env.NEXT_PUBLIC_TENANT_ID || "11",
+    TENANT_ID: ENV.TENANT_ID || "11",
 } as const;

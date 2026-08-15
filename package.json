@@ -2,11 +2,13 @@
   "name": "my-v0-project",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "next build",
-    "dev": "next dev",
-    "lint": "eslint .",
-    "start": "next start"
+    "build": "vite build",
+    "dev": "vite",
+    "lint": "tsc --noEmit",
+    "preview": "vite preview",
+    "start": "vite preview"
   },
   "dependencies": {
     "@cyntler/react-doc-viewer": "^1.17.1",
@@ -38,11 +40,8 @@
     "@radix-ui/react-toggle": "latest",
     "@radix-ui/react-toggle-group": "latest",
     "@radix-ui/react-tooltip": "latest",
-    "@stripe/stripe-js": "^8.6.1",
-    "@vercel/analytics": "latest",
     "autoprefixer": "^10.4.20",
     "axios": "^1.13.2",
-    "socket.io-client": "^2.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -55,8 +54,6 @@
     "input-otp": "latest",
     "jspdf": "^3.0.4",
     "lucide-react": "^0.553.0",
-    "next": "16.0.1",
-    "next-themes": "latest",
     "react": "19.2.0",
     "react-day-picker": "latest",
     "react-dom": "19.2.0",
@@ -68,6 +65,7 @@
     "recharts": "latest",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
+    "socket.io-client": "^2.5.0",
     "sonner": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
@@ -79,14 +77,15 @@
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
     "@types/react": "^19",
-    "@types/socket.io-client": "^1.4.36",
     "@types/react-dom": "^19",
+    "@types/socket.io-client": "^1.4.36",
+    "@vitejs/plugin-react": "latest",
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
-    "eslint-config-next": "16.0.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "latest"
   }
 }

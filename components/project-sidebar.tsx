@@ -1,11 +1,12 @@
 "use client"
-import { useRouter, usePathname } from "next/navigation";
+import { Image, useRouter, usePathname } from "@/lib/spa-router";
 import { useProjectStore } from "@/app/store/project/project.store";
-import Image from "next/image"
+import { ASSET_PREFIX } from "@/lib/env"
+import { cn } from "@/lib/utils"
 
-const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX || "";
+const assetPrefix = ASSET_PREFIX;
 
-export default function ProjectSidebar() {
+export default function ProjectSidebar({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
   const selectedProject = useProjectStore((state) => state.selectedProject);
   const router = useRouter()
   const pathname = usePathname();
@@ -14,14 +15,14 @@ export default function ProjectSidebar() {
   const projectId = selectedProject[0]?.ProjectID;
 
   return (
-    <aside className="w-64 overflow-y-auto border-r border-common-border bg-background scrollbar-hide flex flex-col">
+    <aside className={cn("w-64 overflow-y-auto border-r border-common-border bg-background scrollbar-hide flex flex-col", className)} aria-label="Project navigation">
       <div className="h-full bg-[#191919] overflow-y-auto scrollbar-hide flex flex-col">
         <div className="px-5 pt-4">
           <p className="text-xs text-[#A9AAAA]">RESEARCH</p>
         </div>
         <div className="px-3 pt-4 h-[40px] flex-shrink-0 mb-4">
           <button className="w-full container-gradient text-white px-5 py-3 rounded-lg text-[15px] font-light hover:bg-primary/90 transition-colors flex items-center gap-2 cursor-pointer"
-            onClick={() => router.push(`/projects/ask-rover?projectId=${projectId}`)}>
+            onClick={() => { router.push(`/projects/ask-rover?projectId=${projectId}`); onNavigate?.() }}>
             <Image
               src={`${assetPrefix}/assets/icons/ai.svg`}
               alt="Ask Rover"
@@ -42,7 +43,7 @@ export default function ProjectSidebar() {
                     : "hover:bg-[#232323] text-white"
                 }
               `}
-              onClick={() => router.push(`/projects/insights?projectId=${projectId}`)}
+              onClick={() => { router.push(`/projects/insights?projectId=${projectId}`); onNavigate?.() }}
               >
               <Image
                 src={`${assetPrefix}/assets/images/Saved_Insights.png`}

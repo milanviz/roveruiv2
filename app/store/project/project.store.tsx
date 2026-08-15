@@ -18,6 +18,8 @@ export const useProjectStore = create<ProjectStore>()(
             currentUserMailId: "",
             sahredUsers: {},
             hydrated: false,
+            projectsStatus: "idle",
+            projectsError: null,
 
             setProjects: (list) => set({ projects: list }),
             setSelectedProject: (list) => set({ selectedProject: list }),
@@ -34,8 +36,11 @@ export const useProjectStore = create<ProjectStore>()(
                     AiAgentList: state.AiAgentList.map((item) => ({ ...item, selected: false })),
                 })),
             setCurrentUser: (user: string) => set({ currentUser: user }),
+            setCurrentUserMailId: (email: string) => set({ currentUserMailId: email }),
             setSharedUsers: (list) => set({ sahredUsers: list }),
             setHydrated: () => set({ hydrated: true }),
+            setProjectsStatus: (projectsStatus) => set({ projectsStatus }),
+            setProjectsError: (projectsError) => set({ projectsError }),
         }),
         {
             name: "project-store",
@@ -45,6 +50,7 @@ export const useProjectStore = create<ProjectStore>()(
                 projects: state.projects,
                 selectedProject: state.selectedProject,
                 currentUser: state.currentUser,
+                currentUserMailId: state.currentUserMailId,
                 sahredUsers: state.sahredUsers,
                 AiAgentList: state.AiAgentList,
             }),

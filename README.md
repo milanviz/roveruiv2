@@ -1,8 +1,38 @@
-# roveruiv2
+# Rover UI
 
-
+Static React 19 application built with Vite. Project and film UI state is stored
+in the browser, while the existing Vizru workflow and realtime endpoints remain
+connected.
 
 ## Getting started
+
+```bash
+npm install
+npm run dev
+```
+
+Create a production build with `npm run build`. The deployable static files are
+written to `dist/` and can be hosted by any static web server. Configure the
+server to fall back to `index.html` for application routes such as
+`/projects/ask-rover`.
+
+Optional Vite environment variables:
+
+```bash
+VITE_BASE_PATH=/
+VITE_PUBLIC_API_URL=https://ai-demo.vizru-ras.com/
+VITE_SOCKET_URL=https://chat-react-app.vizru-ras.com
+VITE_SOCKET_HANDSHAKE_TOKEN=...
+VITE_TENANT_ID=11
+VITE_ENABLE_MOCKS=false
+```
+
+Live workflows are used by default. Set `VITE_ENABLE_MOCKS=true` only for the
+browser-local demo workflow responses. Workflow endpoints must allow CORS requests
+from the deployed site. Values in
+`VITE_*` variables are public and must not contain server secrets.
+
+<!-- Legacy repository setup notes follow. -->
 
 To make it easy for you to get started with GitLab, here's a list of recommended next steps.
 

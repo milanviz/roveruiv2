@@ -3,14 +3,14 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, Sparkles, FileText } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Image, useRouter, useSearchParams } from "@/lib/spa-router"
 import { useState, useEffect, useRef } from "react"
 import { ProjectCreateController } from "@/controllers/project-controller"
-import { useSearchParams } from "next/navigation"
 import { useProjectStore } from "@/app/store/project/project.store"
-import Image from "next/image"
+import { ASSET_PREFIX } from "@/lib/env"
 import CustomButton from "./custom-button"
-import { Toaster, toast } from "sonner"
+import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/async-state"
 
 export default function ProjectCreate() {
   const router = useRouter()
@@ -31,6 +31,8 @@ export default function ProjectCreate() {
   const [analysisReport, setAnalysisReport] = useState<any>(null)
   const [scriptId, setScriptId] = useState<string | null>(null)
   const [uploadedFilename, setUploadedFilename] = useState<string | null>(null)
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
 
   // Screenplay Script Analyzer States
   const [isDragging, setIsDragging] = useState(false)
@@ -79,10 +81,19 @@ export default function ProjectCreate() {
   }, [isAnalyzing]);
 
   const handleScriptUpload = async (file: File) => {
+    const allowedTypes = ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+    const allowedExtension = /\.(pdf|txt|docx)$/i.test(file.name)
+    if ((!allowedTypes.includes(file.type) && !allowedExtension) || file.size > 25 * 1024 * 1024) {
+      toast.error(file.size > 25 * 1024 * 1024 ? "The screenplay must be smaller than 25 MB." : "Upload a PDF, TXT, or DOCX screenplay.")
+      return
+    }
     setIsAnalyzing(true);
+    setUploadedFile(null);
+    setUploadedFilename(null);
+    setUploadedFileUrl(null);
 
     try {
-      const { FILM_UPLOAD_WORKFLOW_URL } = await import('@/lib/film-workflows');
+      const { FILM_UPLOAD_WORKFLOW_URL, extractFileProxyUrl } = await import('@/lib/film-workflows');
       const formData = new FormData();
       
       const generatedScriptId = `script-${Date.now()}`;
@@ -136,13 +147,20 @@ export default function ProjectCreate() {
 
         // Extract script_id if returned, otherwise use the generated one
         const extractedScriptId = meta.script_id || meta.scriptId || row.script_id || row.scriptId || generatedScriptId;
+        const extractedFileUrl =
+          meta.file_full_url || meta.file_url || meta.FileFullPath ||
+          row.file_full_url?.data || row.file_full_url || row.file_url || row.FileFullPath ||
+          extractFileProxyUrl(uploadData) || null;
         setScriptId(extractedScriptId);
         setUploadedFilename(file.name);
+        setUploadedFileUrl(extractedFileUrl);
+        setUploadedFile(file);
       } else {
         // Fallback: no parseable response, use filename as title
         setResearchTopic(file.name.replace(/\.[^/.]+$/, ""));
         setScriptId(generatedScriptId);
         setUploadedFilename(file.name);
+        setUploadedFile(file);
       }
 
       // Start with empty analysis — tabs will fetch live when visited
@@ -156,6 +174,7 @@ export default function ProjectCreate() {
 
       toast.success("Script uploaded successfully!");
     } catch (err: any) {
+      setUploadedFile(null);
       console.warn("Screenplay analysis error:", err);
       toast.error(err?.message || "Failed to upload screenplay");
     } finally {
@@ -218,6 +237,12 @@ export default function ProjectCreate() {
       return;
     }
 
+    if (!uploadedFile) {
+      toast.error("Please upload a screenplay file before creating the project");
+      fileInputRef.current?.click();
+      return;
+    }
+
     if (createLoader) {
       return;
     }
@@ -245,6 +270,7 @@ export default function ProjectCreate() {
         expectedBudget: filmExpectedBudget,
         scriptId: ensuredScriptId,
         filename: uploadedFilename,
+        fileFullUrl: uploadedFileUrl,
       }));
       if (analysisReport) {
         localStorage.setItem("temp_film_analysis", JSON.stringify(analysisReport));
@@ -255,15 +281,26 @@ export default function ProjectCreate() {
       console.error("Failed to save temp film metadata", e);
     }
 
-    await ProjectCreateController(researchTopic, aiAgent, setDisable, router, setCreateLoader, setResearchTopic);
+    try {
+      await ProjectCreateController(
+        researchTopic,
+        aiAgent,
+        setDisable,
+        router,
+        setCreateLoader,
+        setResearchTopic,
+        uploadedFile,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Project creation failed. Please try again.")
+    }
   };
 
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX || "";
+  const assetPrefix = ASSET_PREFIX;
 
   return (
     <div className="flex flex-col h-full overflow-auto scrollbar-hide">
-      <Toaster richColors position="top-right" />
-      <div className="flex-1 p-8 space-y-12">
+      <div className="page-container flex-1 space-y-10 py-8 sm:py-10">
         <div className="max-w-[1400px] mx-auto text-center mb-18 pt-6">
           <h1 className="text-4xl m-0 font-medium text-foreground flex items-center justify-center gap-2 text-gradient">
             Welcome!
@@ -273,7 +310,7 @@ export default function ProjectCreate() {
 
         <div className="max-w-[1400px] mx-auto mb-8 space-y-6">
             {/* Screenplay Script Upload Zone */}
-            <div className="border border-border/80 bg-[#0B0B0B]/80 rounded-xl p-5 backdrop-blur-md space-y-4 shadow-xl">
+            <div className="rover-surface space-y-4 p-4 sm:p-5" aria-busy={isAnalyzing}>
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-medium text-foreground flex items-center gap-2">
@@ -286,7 +323,7 @@ export default function ProjectCreate() {
               </div>
 
               {isAnalyzing ? (
-                <div className="flex flex-col items-center justify-center border border-primary/40 bg-primary/5 rounded-lg p-8 text-center space-y-4 animate-pulse">
+                <div role="status" aria-live="polite" className="flex min-h-[190px] flex-col items-center justify-center space-y-4 rounded-lg border border-primary/40 bg-primary/5 p-6 text-center">
                   <Loader2 className="w-10 h-10 text-primary animate-spin" />
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-foreground">{analysisStep}</p>
@@ -303,11 +340,13 @@ export default function ProjectCreate() {
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
+                    if (isAnalyzing || createLoader) return;
                     setIsDragging(true);
                   }}
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={(e) => {
                     e.preventDefault();
+                    if (isAnalyzing || createLoader) return;
                     setIsDragging(false);
                     const files = e.dataTransfer.files;
                     if (files && files.length > 0) {
@@ -319,7 +358,11 @@ export default function ProjectCreate() {
                       ? "border-primary bg-primary/5 scale-[1.01]"
                       : "border-[#333] hover:border-primary/50 bg-[#060606] hover:bg-[#0A0A0A]"
                   }`}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => { if (!isAnalyzing && !createLoader) fileInputRef.current?.click() }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload screenplay"
+                  onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && !isAnalyzing && !createLoader) fileInputRef.current?.click() }}
                 >
                   <input
                     type="file"
@@ -356,71 +399,74 @@ export default function ProjectCreate() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-none text-foreground">Screenplay Title</label>
+              <label htmlFor="screenplay-title" className="block text-sm font-none text-foreground">Screenplay Title</label>
               <input
+                id="screenplay-title"
                 type="text"
                 placeholder={uploadedFilename || "E.g. Inception"}
                 ref={inputRef}
                 value={researchTopic}
-                className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
+                disabled={isAnalyzing || createLoader}
+                aria-busy={isAnalyzing}
+                className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors disabled:opacity-60"
                 onChange={(e) => setResearchTopic(e.target.value)}
               />
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="block text-sm font-none text-foreground">Screenplay Language</label>
-                <input
+                <label htmlFor="screenplay-language" className="block text-sm font-none text-foreground">Screenplay Language</label>
+                {isAnalyzing ? <Skeleton className="h-[50px] w-full" /> : <input id="screenplay-language"
                   type="text"
                   placeholder="Filled from script upload"
                   value={filmLanguage}
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
                   onChange={(e) => setFilmLanguage(e.target.value)}
-                />
+                />}
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-none text-foreground">Genre</label>
-                <input
+                <label htmlFor="screenplay-genre" className="block text-sm font-none text-foreground">Genre</label>
+                {isAnalyzing ? <Skeleton className="h-[50px] w-full" /> : <input id="screenplay-genre"
                   type="text"
                   placeholder="Filled from script upload"
                   value={filmGenre}
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
                   onChange={(e) => setFilmGenre(e.target.value)}
-                />
+                />}
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-none text-foreground">Target Market / Industry</label>
-                <input
+                <label htmlFor="target-market" className="block text-sm font-none text-foreground">Target Market / Industry</label>
+                {isAnalyzing ? <Skeleton className="h-[50px] w-full" /> : <input id="target-market"
                   type="text"
                   placeholder="Filled from script upload"
                   value={filmTargetMarket}
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
                   onChange={(e) => setFilmTargetMarket(e.target.value)}
-                />
+                />}
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-none text-foreground">Release Strategy</label>
-                <input
+                <label htmlFor="release-strategy" className="block text-sm font-none text-foreground">Release Strategy</label>
+                {isAnalyzing ? <Skeleton className="h-[50px] w-full" /> : <input id="release-strategy"
                   type="text"
                   placeholder="Filled from script upload"
                   value={filmReleaseStrategy}
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
                   onChange={(e) => setFilmReleaseStrategy(e.target.value)}
-                />
+                />}
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <label className="block text-sm font-none text-foreground">Expected Budget (Optional)</label>
-                <input
+                <label htmlFor="expected-budget" className="block text-sm font-none text-foreground">Expected Budget (Optional)</label>
+                {isAnalyzing ? <Skeleton className="h-[50px] w-full" /> : <input id="expected-budget"
                   type="text"
                   placeholder="Filled from script upload"
                   value={filmExpectedBudget}
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
                   onChange={(e) => setFilmExpectedBudget(e.target.value)}
-                />
+                />}
               </div>
             </div>
           </div>
@@ -433,6 +479,10 @@ export default function ProjectCreate() {
             {AiAgentList.map((specialist) => (
               <Card
                 key={specialist.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={specialist.selected}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setAiAgent(specialist.id) } }}
                 className={`${specialist.selected ? "" : "bg-[#0D0D0D]"} 
                 relative overflow-visible 
                 hover:card-bg-gradient transition-all cursor-pointer flex items-start p-0`}
@@ -476,7 +526,7 @@ export default function ProjectCreate() {
         {/* `` */}
         <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-2">
           <span className="flex-grow h-[1px] bg-[#2a2a2a]"></span>
-          <CustomButton disable={false} handleFN={handleProjectCreate} btnTitle="Create Project" isLoading={createLoader} />
+          <CustomButton disable={disable || createLoader || !uploadedFile} handleFN={handleProjectCreate} btnTitle="Create Project" isLoading={createLoader} />
           {/* <span className="flex-grow h-[1px] bg-[#2a2a2a]"></span>
           <CustomButton disable={disable || createLoader} handleFN={handleProjectCreate} btnTitle="Create Project" isLoading={createLoader} /> */}
         </div>

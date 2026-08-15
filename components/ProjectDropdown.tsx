@@ -28,8 +28,9 @@ export default function ProjectDropdown({
       if (!ref.current) return;
       if (!ref.current.contains(e.target as Node)) onClose();
     };
-    if (open) document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose() };
+    if (open) { document.addEventListener("mousedown", onClick); document.addEventListener("keydown", onKeyDown); }
+    return () => { document.removeEventListener("mousedown", onClick); document.removeEventListener("keydown", onKeyDown); };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -37,13 +38,13 @@ export default function ProjectDropdown({
   const anchor = typeof window !== "undefined" ? document.getElementById(anchorId) : null;
   const rect = anchor?.getBoundingClientRect();
   const top = rect ? rect.bottom + window.scrollY + 8 : 80;
-  const left = rect ? rect.left + window.scrollX : 24;
+  const left = rect ? Math.min(rect.left + window.scrollX, window.innerWidth - Math.min(380, window.innerWidth - 32) - 16) : 16;
 
   return (
     <div
       ref={ref}
       style={{ top, left }}
-      className="absolute z-40 w-[380px] card"
+      className="rover-surface absolute z-40 w-[min(380px,calc(100vw-2rem))] overflow-hidden"
     >
       <div className="p-4 border-b border-white/10 flex items-center justify-between">
         <div className="text-sm text-zinc-300">All Projects</div>

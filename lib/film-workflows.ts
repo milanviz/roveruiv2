@@ -1,3 +1,12 @@
+import { APP_CONFIG } from "@/app/config/config"
+import {
+  cachedWorkflowRequest,
+  invalidateWorkflowCache,
+  readWorkflowCache,
+  WORKFLOW_CACHE_TTL,
+  writeWorkflowCache,
+} from "@/lib/workflow-cache"
+
 export type FilmAnalysisSection =
   | "overview"
   | "story"
@@ -8,13 +17,13 @@ export type FilmAnalysisSection =
   | "greenlight"
 
 export const FILM_UPLOAD_WORKFLOW_URL =
-  "https://ai-demo.vizru-ras.com/workflow.trigger/roverscriptdemo6a7ad4f143079"
+  `${APP_CONFIG.PUBLIC_API_URL}workflow.trigger/roverscriptdemo6a7ad4f143079`
 
 export const FILM_METADATA_WORKFLOW_URL =
-  "https://ai-demo.vizru-ras.com/workflow.trigger/roverscriptdemodetails6a7b1a94831b3"
+  `${APP_CONFIG.PUBLIC_API_URL}workflow.trigger/roverscriptdemodetails6a7b1a94831b3`
 
 export const FILM_SUMMARIZE_WORKFLOW_URL =
-  "https://ai-demo.vizru-ras.com/workflow.trigger/roverscriptdemocontentsparent6a7ea1c86776c"
+  `${APP_CONFIG.PUBLIC_API_URL}workflow.trigger/roverscriptdemocontentsparent6a7ea1c86776c`
 
 export const FILM_ANALYSIS_SECTIONS: FilmAnalysisSection[] = [
   "overview",
@@ -25,6 +34,21 @@ export const FILM_ANALYSIS_SECTIONS: FilmAnalysisSection[] = [
   "development",
   "greenlight",
 ]
+
+export type SavedFilmDashboard = {
+  user_id: string
+  user_email: string
+  project_id: string
+  file_name: string
+  file_full_url: string
+  sections: Record<FilmAnalysisSection, Record<string, unknown>>
+}
+
+const dashboardCacheKey = (email: string, projectId: string) =>
+  `film-dashboard:${email.toLowerCase()}:${projectId}`
+const dashboardLookupCacheKey = (email: string, projectId: string) =>
+  `film-dashboard-lookup:${email.toLowerCase()}:${projectId}`
+const metadataCacheKey = (scriptId: string) => `film-metadata:${scriptId}`
 
 export function isFilmAnalysisSection(value: string): value is FilmAnalysisSection {
   return (FILM_ANALYSIS_SECTIONS as string[]).includes(value)
@@ -74,6 +98,140 @@ function parseMaybeJson(value: unknown): unknown {
   } catch {
     return value
   }
+}
+
+function workflowRecordList(value: unknown): Record<string, unknown>[] {
+  const parsed = parseMaybeJson(value)
+  if (Array.isArray(parsed)) {
+    const records = asRecordList(parsed)
+    if (records.some((row) => "project_id" in row)) return records
+    for (const record of records) {
+      for (const key of ["output", "data", "projects", "result", "filter", "val"]) {
+        if (key in record) {
+          const nested = workflowRecordList(record[key])
+          if (nested.length) return nested
+        }
+      }
+    }
+    return records
+  }
+  if (parsed && typeof parsed === "object") {
+    const record = parsed as Record<string, unknown>
+    if ("project_id" in record) return [record]
+    for (const key of ["output", "data", "projects", "result", "filter", "val"]) {
+      if (key in record) {
+        const nested = workflowRecordList(record[key])
+        if (nested.length) return nested
+      }
+    }
+  }
+  return []
+}
+
+function storedSection(value: unknown): Record<string, unknown> | null {
+  const unwrappedValue = value && typeof value === "object" && !Array.isArray(value) && "data" in value
+    ? (value as Record<string, unknown>).data
+    : value
+  const parsed = parseMaybeJson(unwrappedValue)
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+  const record = parsed as Record<string, unknown>
+  if (typeof record.output === "string") {
+    const unwrapped = coerceJsonObject(record.output)
+    if (unwrapped) return unwrapped
+  }
+  return record
+}
+
+function fieldString(value: unknown): string {
+  if (typeof value === "string") return value
+  if (value && typeof value === "object" && "data" in value) {
+    return fieldString((value as Record<string, unknown>).data)
+  }
+  return value == null ? "" : String(value)
+}
+
+async function postWorkflowFields(
+  workflow: string,
+  fields: Record<string, string>,
+): Promise<unknown> {
+  const body = new FormData()
+  Object.entries(fields).forEach(([key, value]) => body.append(key, value))
+  const response = await fetch(`${APP_CONFIG.PUBLIC_API_URL}${workflow}`, {
+    method: "POST",
+    body,
+  })
+  const text = await response.text()
+  if (!response.ok || /internal server error/i.test(text)) {
+    throw new Error(`Workflow ${workflow} failed: ${response.status} ${text}`.trim())
+  }
+  return parseMaybeJson(text)
+}
+
+export async function fetchSavedFilmDashboard(
+  userEmail: string,
+  projectId: string,
+  force = false,
+): Promise<SavedFilmDashboard | null> {
+  if (!userEmail || !projectId) return null
+  const projectKey = dashboardCacheKey(userEmail, projectId)
+  if (!force) {
+    const projectCached = readWorkflowCache<SavedFilmDashboard>(projectKey)
+    if (projectCached) return projectCached
+  }
+
+  const rows = await cachedWorkflowRequest(
+    dashboardLookupCacheKey(userEmail, projectId),
+    WORKFLOW_CACHE_TTL.DASHBOARD_LIST,
+    async () => {
+      const raw = await postWorkflowFields(APP_CONFIG.GET_FILM_DASHBOARD_WF, {
+        user_email: userEmail,
+        project_id: projectId,
+      })
+      return workflowRecordList(raw)
+    },
+    { force, staleOnError: false },
+  )
+  const row = rows.find((candidate) => fieldString(candidate.project_id) === projectId)
+  if (!row) return null
+
+  const sections = {} as Record<FilmAnalysisSection, Record<string, unknown>>
+  for (const section of FILM_ANALYSIS_SECTIONS) {
+    const value = storedSection(row[`file_${section}`])
+    if (!value) return null
+    sections[section] = value
+  }
+
+  const dashboard = {
+    user_id: fieldString(row.user_id),
+    user_email: fieldString(row.user_email),
+    project_id: fieldString(row.project_id),
+    file_name: fieldString(row.file_name),
+    file_full_url: fieldString(row.file_full_url),
+    sections,
+  }
+  writeWorkflowCache(projectKey, dashboard, WORKFLOW_CACHE_TTL.DASHBOARD)
+  return dashboard
+}
+
+export async function saveFilmDashboard(input: SavedFilmDashboard): Promise<unknown> {
+  const fields: Record<string, string> = {
+    user_id: input.user_id,
+    user_email: input.user_email,
+    project_id: input.project_id,
+    file_name: input.file_name,
+    file_full_url: input.file_full_url,
+  }
+  for (const section of FILM_ANALYSIS_SECTIONS) {
+    fields[`file_${section}`] = JSON.stringify(input.sections[section])
+  }
+  const result = await postWorkflowFields(APP_CONFIG.SAVE_FILM_DASHBOARD_WF, fields)
+  writeWorkflowCache(
+    dashboardCacheKey(input.user_email, input.project_id),
+    input,
+    WORKFLOW_CACHE_TTL.DASHBOARD,
+  )
+  invalidateWorkflowCache(dashboardLookupCacheKey(input.user_email, input.project_id))
+  return result
 }
 
 function rowScriptId(row: Record<string, unknown>): string | null {
@@ -395,42 +553,41 @@ Return a single JSON object matching this schema exactly (include all keys; use 
 ${SECTION_SCHEMAS[section]}`
 }
 
-export async function fetchMetadataWorkflow(scriptId: string): Promise<{
+export async function fetchMetadataWorkflow(scriptId: string, force = false): Promise<{
   metadata: unknown
   fileUrl: string | null
   raw: unknown
 }> {
-  const workflowRes = await fetch("/api/proxy-workflow", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      url: FILM_METADATA_WORKFLOW_URL, 
-      payload: { script_id: scriptId } 
-    }),
-  })
+  return cachedWorkflowRequest(
+    metadataCacheKey(scriptId),
+    WORKFLOW_CACHE_TTL.FILE_METADATA,
+    async () => {
+      const workflowRes = await fetch(FILM_METADATA_WORKFLOW_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script_id: scriptId }),
+      })
 
-  if (!workflowRes.ok) {
-    throw new Error(`Metadata workflow failed with status ${workflowRes.status}`)
-  }
+      if (!workflowRes.ok) {
+        throw new Error(`Metadata workflow failed with status ${workflowRes.status}`)
+      }
 
-  const raw = await workflowRes.json()
-  const matched = resolveScriptFileRecord(raw, scriptId)
-  if (matched) {
-    return { metadata: matched.metadata, fileUrl: matched.fileUrl, raw }
-  }
+      const raw = await workflowRes.json()
+      const matched = resolveScriptFileRecord(raw, scriptId)
+      if (matched) return { metadata: matched.metadata, fileUrl: matched.fileUrl, raw }
 
-  // Fail closed: never return another script's file_url
-  return { metadata: parseWorkflowOutput(raw), fileUrl: null, raw }
+      // Fail closed: never return another script's file_url
+      return { metadata: parseWorkflowOutput(raw), fileUrl: null, raw }
+    },
+    { force },
+  )
 }
 
 export async function fetchSummarizeWorkflow(fileUrl: string, prompt: string, section: string): Promise<unknown> {
-  const workflowRes = await fetch("/api/proxy-workflow", {
+  const workflowRes = await fetch(FILM_SUMMARIZE_WORKFLOW_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      url: FILM_SUMMARIZE_WORKFLOW_URL, 
-      payload: { url: fileUrl, prompt, section_name: section } 
-    }),
+    body: JSON.stringify({ url: fileUrl, prompt, section_name: section }),
   })
 
   if (!workflowRes.ok) {

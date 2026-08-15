@@ -1,9 +1,104 @@
 import { APP_CONFIG } from "@/app/config/config"
 import { ProjectType } from "@/types/project-types";
 import { useAskRoverStore } from "@/app/store/ask-rover/ask-rover.store";
-import { useState } from "react";
-import { getAuthFromStorage, refreshAuthToken } from "@/lib/auth";
 import { setCurrentController, getCurrentController } from "@/app/utils/streamingController";
+import { onVizruEvent, waitForVizruSocketConnection } from "@/lib/vizru-socket";
+import { toast } from "sonner";
+import { useProjectStore } from "@/app/store/project/project.store";
+
+const parseWorkflowJson = (value: unknown): unknown => {
+    if (typeof value !== "string") return value;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return value;
+    }
+};
+
+const historyRows = (payload: unknown): Record<string, any>[] => {
+    const parsed = parseWorkflowJson(payload);
+    if (Array.isArray(parsed)) {
+        const records = parsed.filter(
+            (item): item is Record<string, any> => !!item && typeof item === "object" && !Array.isArray(item),
+        );
+        if (records.some((row) => "Question" in row || "user_message" in row)) return records;
+        for (const item of parsed) {
+            const nested = historyRows(item);
+            if (nested.length) return nested;
+        }
+        return [];
+    }
+    if (!parsed || typeof parsed !== "object") return [];
+    const record = parsed as Record<string, any>;
+    if ("Question" in record || "user_message" in record) return [record];
+    for (const key of ["output", "data", "result", "history", "conversations", "messages", "filter", "val"]) {
+        if (key in record) {
+            const nested = historyRows(record[key]);
+            if (nested.length) return nested;
+        }
+    }
+    return [];
+};
+
+const historyQuestions = (payload: unknown): Record<string, string[]> | undefined => {
+    const parsed = parseWorkflowJson(payload);
+    if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+            const questions = historyQuestions(item);
+            if (questions) return questions;
+        }
+        return undefined;
+    }
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const record = parsed as Record<string, any>;
+    if (record.questions) {
+        const questions = parseWorkflowJson(record.questions);
+        if (questions && typeof questions === "object" && !Array.isArray(questions)) {
+            return questions as Record<string, string[]>;
+        }
+    }
+    for (const key of ["output", "data", "result", "history", "filter", "val"]) {
+        if (key in record) {
+            const questions = historyQuestions(record[key]);
+            if (questions) return questions;
+        }
+    }
+    return undefined;
+};
+
+const insertConversationMessage = async ({
+    userMessage,
+    aiMessage,
+    userId,
+    projectId,
+}: {
+    userMessage: string;
+    aiMessage: string;
+    userId: string;
+    projectId: string;
+}) => {
+    if (!userId || !projectId) {
+        throw new Error("Cannot save this conversation without a user_id and project_id.");
+    }
+
+    const response = await fetch(
+        APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.AFTER_MESSAGE_RECEIVE_WF,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                user_message: userMessage,
+                ai_message: aiMessage,
+                user_id: userId,
+                project_id: projectId,
+            }),
+        },
+    );
+    const responseText = await response.text();
+    if (!response.ok || /internal server error/i.test(responseText)) {
+        throw new Error(`Failed to save conversation: ${response.status} ${responseText}`.trim());
+    }
+};
 
 export const GetChatHistory = async (
     projectid: string,
@@ -25,25 +120,17 @@ export const GetChatHistory = async (
             throw new Error(`Failed to fetch: ${res.status}`);
         }
 
-        const chatHistory = await res.json();
+        const historyPayload = await res.json();
+        const chatHistory = historyRows(historyPayload);
 
         // Extract questions from the response if available (for Popular Research Topics)
-        let questions: Record<string, string[]> | undefined;
-        if (chatHistory[0]?.questions) {
-            try {
-                const questionsData = chatHistory[0].questions;
-                questions = typeof questionsData === 'string'
-                    ? JSON.parse(questionsData)
-                    : questionsData;
-            } catch (e) {
-                console.error("Error parsing questions from chat history:", e);
-            }
-        }
+        const questions = historyQuestions(historyPayload);
 
         // FILTER OUT invalid questions
-        const validHistory = chatHistory.filter(
-            (h: any) => h?.Question && h.Question.trim().length > 0
-        );
+        const validHistory = chatHistory.filter((h: any) => {
+            const question = h?.Question ?? h?.user_message;
+            return typeof question === "string" && question.trim().length > 0;
+        });
 
         // If no valid history, exit early but still return questions
         if (validHistory.length === 0) {
@@ -53,11 +140,11 @@ export const GetChatHistory = async (
 
         // Format
         const formattedHistory = validHistory.map((h: any) => ({
-            question: h.Question || "",
-            answer: h.Answer || "",
-            qid: h.QID || "",
-            userlist: h.UpvotedJSON || "",
-            count: h.UpVotedCount || "",
+            question: h.Question ?? h.user_message ?? "",
+            answer: h.Answer ?? h.ai_message ?? "",
+            qid: h.QID ?? h.qid ?? "",
+            userlist: h.UpvotedJSON ?? h.userlist ?? "",
+            count: h.UpVotedCount ?? h.count ?? "",
         }));
 
         // Oldest → Newest
@@ -68,8 +155,8 @@ export const GetChatHistory = async (
 
         return { history: orderedHistory, questions };
     } catch (error) {
-        console.error("Project Create Error:", error);
-        return { history: [] };
+        console.error("Chat history error:", error);
+        throw error;
     }
 };
 
@@ -77,241 +164,157 @@ export const getMessageResponse = async (
     question: string,
     selectedVisibility: string,
     selectedProject: ProjectType,
-    isTyping: boolean,
-    setIsTyping: (value: boolean) => void,
-    currentAnswerRef: React.RefObject<HTMLDivElement | null>,
-    setTypingText: (value: string) => void,
-    appendMessages: (
-        updater: (prev: { question: string; answer: string; qid?: string; userlist?: string; count?: string }[])
-            => { question: string; answer: string; qid?: string; userlist?: string; count?: string }[]
-    ) => void,
-    setPendingQuestion: (value: string) => void,
-    setIsChatActive: (value: boolean) => void,
-    setSendMessage: (value: boolean) => void,
-    setReadyForSendMessage: (value: boolean) => void,
+    callbacks: {
+        onStart: () => void;
+        onChunk: (content: string) => void;
+        onComplete: (content: string) => void;
+        onCancel: (content: string) => void;
+        onError: (error: string, partial: string) => void;
+    },
 ) => {
     const { setAfterStreaming } = useAskRoverStore.getState();
+    const projectId = selectedProject?.ProjectID || "";
+    const currentProject = useProjectStore.getState().projects.find(
+        (project) => project.ProjectID === projectId,
+    );
+    const userId = selectedProject?.user_id
+        || currentProject?.user_id
+        || localStorage.getItem("rover_user_id")
+        || "";
 
     // create and store controller
     const controller = new AbortController();
     setCurrentController(controller);
 
-    // mark UI as active
-    setSendMessage(true);
-    setIsChatActive(true);
+    callbacks.onStart();
 
     // accumulator visible to catch block
     let accumulated = "";
-    let lastRenderTime = 0;
     let streamingDone = false;
+    let activeWorkflowLogId: string | number | null = null;
+    let unsubscribe = () => {};
 
     try {
-        const formData = new FormData();
-        formData.append("question", question);
-        formData.append("source", selectedVisibility.toLowerCase());
-        formData.append("project_id", selectedProject ? selectedProject.ProjectID : "");
-        formData.append("document_id", "67890");
-        formData.append("user_id", localStorage.getItem("rover_user_email") || "");
-        formData.append("workflow_url", APP_CONFIG.ORIGIN_URL + APP_CONFIG.AFTER_MESSAGE_RECEIVE_WF);
-
-        const authData = getAuthFromStorage();
-        formData.append("token", authData.token);
-        formData.append("auth_url", `${APP_CONFIG.ORIGIN_URL}workflow.trigger/roverv2jwtvalidator692d234f021c1`);
-
-        const url = APP_CONFIG.PUBLIC_CHAT_API_URL;
-
-        let response = await fetch(url, {
-            method: "POST",
-            body: formData,
-            signal: controller.signal,
+        // The workflow publishes chunks on the empty Socket Event Tag. Lock to
+        // the first workflow log seen after this request starts so a later
+        // agent stream cannot get mixed into the current answer.
+        let resolveStreamDone = () => {};
+        const streamDone = new Promise<void>((resolve) => {
+            resolveStreamDone = resolve;
         });
 
-        // token refresh
-        if (response.status === 401) {
-            const newAuthData = await refreshAuthToken();
-            if (newAuthData.token) {
-                formData.set("token", newAuthData.token);
-                response = await fetch(url, {
-                    method: "POST",
-                    body: formData,
-                    signal: controller.signal,
-                });
-            } else {
-                throw new Error("Session expired. Please refresh the page.");
+        unsubscribe = onVizruEvent("", (payload: any) => {
+            if (controller.signal.aborted || payload?.type !== "agent_stream") return;
+
+            const logId = payload.workflow_log_id ?? null;
+            if (activeWorkflowLogId === null && payload.status === "streaming") {
+                activeWorkflowLogId = logId;
             }
+            if (activeWorkflowLogId !== null && logId !== activeWorkflowLogId) return;
+
+            if (payload.status === "streaming") {
+                accumulated += typeof payload.Body === "string" ? payload.Body : "";
+                callbacks.onChunk(accumulated);
+            } else if (payload.status === "complete") {
+                streamingDone = true;
+                resolveStreamDone();
+            }
+        });
+
+        // AuthProvider normally owns this connection. Calling it here is
+        // idempotent and also covers a chat opened before provider setup ends.
+        const socketReady = await waitForVizruSocketConnection();
+        if (!socketReady) {
+            console.warn("[ask-rover] realtime socket unavailable; using the workflow response");
         }
 
-        if (!response.ok || !response.body) {
-            setIsChatActive(false);
-            setReadyForSendMessage(false)
+        const response = await fetch(
+            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.ASK_ROVER_CHAT_WF,
+            {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                user_id: userId,
+                project_id: projectId,
+                prompt: question,
+            }),
+            signal: controller.signal,
+            }
+        );
+
+        if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        // get reader
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
+        const result = await response.json();
+        const row = Array.isArray(result) ? result[0] : result;
 
-        let sseBuffer = "";
+        // Normally the complete socket event arrives just before the HTTP
+        // trigger resolves. Allow a short grace period for reordered delivery.
+        if (!streamingDone && activeWorkflowLogId !== null) {
+            await Promise.race([
+                streamDone,
+                new Promise<void>((resolve) => window.setTimeout(resolve, 2000)),
+            ]);
+        }
 
-        while (true) {
-            const { value, done } = await reader.read();
+        const answer = accumulated || (typeof row?.response === "string" ? row.response : "");
+        if (!answer) throw new Error("The workflow returned an empty response.");
 
-            if (done) break;
+        setAfterStreaming({
+            question,
+            answer,
+            project_id: projectId,
+            document_id: "",
+            user_id: userId,
+            qid: "",
+            source: selectedVisibility.toLowerCase(),
+            source_documents: [],
+        });
 
-            const chunkText = decoder.decode(value, { stream: true });
-            sseBuffer += chunkText;
-
-            const parts = sseBuffer.split(/\r?\n\r?\n/);
-            sseBuffer = parts.pop() || "";
-
-            for (const part of parts) {
-                const lines = part.split(/\r?\n/);
-                let eventType = "message";
-                const dataLines: string[] = [];
-
-                for (const line of lines) {
-                    const trimmedLine = line.trim();
-                    // Do not skip empty lines! They are structural newlines in the stream logic.
-
-                    if (trimmedLine.startsWith("event:")) {
-                        eventType = trimmedLine.slice(6).trim();
-                    } else if (trimmedLine.startsWith("data:")) {
-                        // SSE spec: after "data:", one optional space should be removed
-                        // Use original line to preserve content spaces (for indentation)
-                        const dataIndex = line.indexOf("data:");
-                        const value = line.slice(dataIndex + 5);
-                        dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
-                    } else {
-                        dataLines.push("\n" + line);
-                    }
-                }
-
-                const data = dataLines.join("\n");
-
-                if (eventType === "message" || eventType === "") {
-                    // Auto-scroll ONCE when the answer begins
-                    if (!isTyping) {
-                        setIsTyping(true);
-                    }
-
-                    accumulated += data;
-                    setTypingText(accumulated);
-                } else if (eventType === "done") {
-                    streamingDone = true;
-                    setIsTyping(false);
-                    setTypingText("");
-
-                    try {
-                        const parsed = JSON.parse(data);
-                        setAfterStreaming(parsed);
-
-                        appendMessages((prev) => {
-                            // replace last placeholder if exists, otherwise push
-                            const next = [...prev];
-                            if (next.length > 0) {
-                                next[next.length - 1] = {
-                                    question,
-                                    answer: parsed.answer || accumulated,
-                                    qid: parsed.qid || "",
-                                    userlist: parsed.userlist || "",
-                                    count: parsed.count || "",
-                                };
-                                return next;
-                            }
-                            return [
-                                ...next,
-                                {
-                                    question,
-                                    answer: parsed.answer || accumulated,
-                                    qid: parsed.qid || "",
-                                    userlist: parsed.userlist || "",
-                                    count: parsed.count || "",
-                                },
-                            ];
-                        });
-                    } catch {
-                        appendMessages((prev) => {
-                            const next = [...prev];
-                            if (next.length > 0) {
-                                next[next.length - 1] = {
-                                    question,
-                                    answer: accumulated,
-                                    qid: "",
-                                    userlist: "",
-                                    count: "",
-                                };
-                                return next;
-                            }
-                            return [
-                                ...next,
-                                { question, answer: accumulated, qid: "", userlist: "", count: "" },
-                            ];
-                        });
-                    }
-
-                    setPendingQuestion("");
-                    setSendMessage(false);
-                }
-            }
+        callbacks.onComplete(answer);
+        try {
+            await insertConversationMessage({
+                userMessage: question,
+                aiMessage: answer,
+                userId,
+                projectId,
+            });
+        } catch (saveError) {
+            console.error("Conversation persistence error:", saveError);
+            toast.error("Response received but not saved", {
+                description: "Rover could not add this exchange to conversation history.",
+            });
         }
     } catch (err: any) {
         // manual abort
         if (err.name === "AbortError") {
             console.log("Stream aborted by user");
 
-            setIsTyping(false);
-            setTypingText(""); // clear typing box (we save partial to messages below)
-
-            // Save the partial streamed answer (replace last placeholder if exists)
-            appendMessages((prev) => {
-                const next = [...prev];
-                if (next.length > 0) {
-                    next[next.length - 1] = {
-                        question,
-                        answer: accumulated,
-                        qid: "",
-                        userlist: "",
-                        count: "",
-                    };
-                } else {
-                    next.push({
-                        question,
-                        answer: accumulated,
-                        qid: "",
-                        userlist: "",
-                        count: "",
-                    });
-                }
-                return next;
-            });
-
-            setPendingQuestion("");
-            setSendMessage(false);
+            callbacks.onCancel(accumulated);
             return;
         }
 
         console.error("Stream error:", err);
 
-        let msg = "[error receiving stream]";
-        if (err.message?.includes("Session expired")) msg = err.message;
+        let msg = "The answer stream failed. Send the question again to retry.";
+        if (err instanceof Error && err.message) msg = `${err.message}. Send the question again to retry.`;
 
-        setTypingText(msg);
-        setIsTyping(false);
+        callbacks.onError(msg, accumulated);
+        toast.error("Rover’s response was interrupted", { description: "Your partial answer was preserved. You can send the question again." });
     } finally {
-        setIsChatActive(false);
-        setReadyForSendMessage(false)
+        unsubscribe();
         setCurrentController(null);
     }
 };
 
 
 
-export const stopStreaming = (setSendMessage: (value: boolean) => void) => {
+export const stopStreaming = () => {
     const controller = getCurrentController();
     if (controller) {
         controller.abort();   //instantly stops fetch + reader
         setCurrentController(null);
-        setSendMessage(false);
     }
 };
 
@@ -352,8 +355,12 @@ export const SaveToinsights = async (
 
 export const GetInsights = async (
     projectid: string,
+    force = false,
 ) => {
-    const { setInsightsList } = useAskRoverStore.getState();
+    void force;
+    const { setInsightsList, setInsightsStatus, setInsightsError } = useAskRoverStore.getState();
+    setInsightsStatus("loading");
+    setInsightsError(null);
     const getInstancesData = {
         projectid
     };
@@ -375,9 +382,11 @@ export const GetInsights = async (
         }
         const insights = await res.json();
         setInsightsList(insights);
+        setInsightsStatus("success");
     } catch (error) {
-        // setDisable(false);
         console.error("Project Create Error:", error);
+        setInsightsError(error instanceof Error ? error.message : "Unable to load saved insights.");
+        setInsightsStatus("error");
     }
 }
 

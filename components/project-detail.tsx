@@ -1,1748 +1,195 @@
 "use client"
 
-import {
-  ChevronDown,
-  Download,
-  Share2,
-  Trash2,
-  Archive,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
-  Globe,
-  Paperclip,
-  Send,
-  Star,
-  FileText,
-  Briefcase,
-  TrendingUp,
-  PieChart,
-  GitCompare,
-  ArrowRight,
-  Edit3,
-  Pin,
-  Bookmark,
-  Languages,
-  Copy,
-  RotateCcw,
-  StickyNote,
-  MessageSquarePlus,
-  Search,
-  Check,
-  Plus,
-  CloudHail,
-  ArrowDown,
-  Mic,
-} from "lucide-react"
-import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect, forwardRef, useImperativeHandle, memo } from "react"
-import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { useProjectStore } from "@/app/store/project/project.store";
-import { ProjectType } from "@/types/project-types"
-import MarkdownRenderer from "./markdownrenderer";
-import { getMessageResponse, stopStreaming, translateAnswer } from "@/controllers/ask-rover-controller";
-import { SaveToinsights, GetChatHistory } from "@/controllers/ask-rover-controller";
-import { UniversalPopup } from "./universal-popup";
-import { GetProjectsController, ShareProject, ArchiveProjects } from "@/controllers/project-controller"
-import Image from "next/image"
-import ChatLoader from "./loader/loader";
-import FilmWorkspace from "./FilmWorkspace";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Check, ChevronDown, Film, Plus, Search, X } from "lucide-react"
+import { useSearchParams, Link } from "@/lib/spa-router"
+import { useProjectStore } from "@/app/store/project/project.store"
+import type { ProjectType } from "@/types/project-types"
+import type { ChatTurn } from "@/types/chat"
+import FilmWorkspace from "./FilmWorkspace"
+import ChatWorkspace from "./ChatWorkspace"
+import { GetChatHistory, SaveToinsights, getMessageResponse, stopStreaming, translateAnswer } from "@/controllers/ask-rover-controller"
 
-const ROTATING_TITLES = ["Ask ROVER Anything", "Discover. Analyse. Improve.", "Explore. Learn. Thrive."]
-const ROTATING_PLACEHOLDERS = [
-  "How can AI improve customer engagement?",
-  "Explain recent trends in the EV market.",
-  "What are the top innovations in renewable energy?",
-  "How to identify market gaps using data analytics?",
-]
-
-// Memoize heavy renderer to avoid re-renders when parent updates
-const MemoizedMarkdownRenderer = memo(MarkdownRenderer)
-
-type TextareaController = {
-  send: () => void
-}
-
-type UncontrolledTextareaProps = {
-  initialValue?: string
-  placeholder?: string
-  className?: string
-  onSend: (text: string) => void
-  onBlurSync?: (text: string) => void
-  domRef?: React.RefObject<HTMLTextAreaElement | null>
-  sendMessage: boolean
-}
-
-const UncontrolledTextarea = forwardRef<TextareaController, UncontrolledTextareaProps>(
-  ({ initialValue = "", placeholder = "", className = "", onSend, onBlurSync, domRef, sendMessage }, ref) => {
-    const fallbackRef = useRef<HTMLTextAreaElement | null>(null)
-    const internalRef = domRef || fallbackRef
-    const [hasText, setHasText] = useState<boolean>(initialValue.length > 0)
-
-    useImperativeHandle(ref, () => ({
-      send: () => {
-        const value = internalRef.current?.value ?? ""
-        if (!value.trim()) return
-        onSend(value.trim())
-        if (internalRef.current) internalRef.current.value = ""
-        setHasText(false)
-      },
-    }), [onSend])
-
-    return (
-      <textarea
-        ref={internalRef}
-        defaultValue={initialValue}
-        placeholder={placeholder}
-        className={className}
-        onChange={(e) => setHasText(e.currentTarget.value.length > 0)}
-        onBlur={() => onBlurSync?.(internalRef.current?.value ?? "")}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !sendMessage) {
-            e.preventDefault()
-            const value = internalRef.current?.value ?? ""
-            if (value.trim()) {
-              onSend(value.trim())
-              if (internalRef.current) internalRef.current.value = ""
-              setHasText(false)
-            }
-          }
-        }}
-      />
-    )
-  }
-)
-
+const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export default function ProjectDetail() {
   const searchParams = useSearchParams()
-  const scriptIdFromUrl = searchParams.get("script_id") || searchParams.get("scriptId")
-
-  const [hoveredQuestion, setHoveredQuestion] = useState<number | null>(null)
-  const [savedAnswers, setSavedAnswers] = useState<Set<number>>(new Set())
-  const [translatedAnswers, setTranslatedAnswers] = useState<Map<number, { text: string; code: string }>>(new Map())
-  const [copiedAnswer, setCopiedAnswer] = useState<number | null>(null)
-
-  const [copied, setCopied] = useState<number | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  // Use CSS-only hover visuals to avoid render churn
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [selectedVisibility, setSelectedVisibility] = useState("Public")
-  const [selectedIcon, setSelectedIcon] = useState("public.png")
-  const [activeTab, setActiveTab] = useState("Inspiration")
-  const [activeFilmTab, setActiveFilmTab] = useState("Overview")
-  const [isChatMode, setIsChatMode] = useState<boolean | string>("")
-  const [historyLoaded, setHistoryLoaded] = useState(false)
-  const [messages, setMessages] = useState<Array<{
-    question: string;
-    answer: string;
-    qid: string;
-    userlist: string;
-    count: string
-  }>>([])
-  const [isTyping, setIsTyping] = useState(false)
-  const [currentInput, setCurrentInput] = useState("")
-  const [typingText, setTypingText] = useState("")
-  const [pendingQuestion, setPendingQuestion] = useState("")
-
+  const scriptId = searchParams.get("script_id") || searchParams.get("scriptId")
+  const urlProjectId = searchParams.get("projectId") || ""
+  const generateIfMissing = searchParams.get("generate") === "1"
+  const projects = useProjectStore((state) => state.projects)
+  const selectedProject = useProjectStore((state) => state.selectedProject[0] as ProjectType | undefined)
+  const setSelectedProject = useProjectStore((state) => state.setSelectedProject)
+  const [projectTitle, setProjectTitle] = useState(selectedProject?.ProjectName || "")
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [projectSearch, setProjectSearch] = useState("")
-  const projectSearchRef = useRef<HTMLInputElement | null>(null)
-  const searchDebounceRef = useRef<number | null>(null)
-  const [selectedProjectTitle, setSelectedProjectTitle] = useState("")
-  const [isChatActive, setIsChatActive] = useState(false)
+  const [filmTab, setFilmTab] = useState("Overview")
+  const [turns, setTurns] = useState<ChatTurn[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyAttempt, setHistoryAttempt] = useState(0)
+  const [active, setActive] = useState(false)
+  const [source, setSource] = useState("Public")
+  const requestRef = useRef(0)
 
-  const [pausePlaceholderAnimation, setPausePlaceholderAnimation] = useState(false)
-  const [sendMessage, setSendMessage] = useState(false)
-  const [readyForSendMessage, setReadyForSendMessage] = useState(false)
-  const [isPopupOpen, setIsPopupOpen] = useState(false)
-  const [showScrollButton, setShowScrollButton] = useState(false)
-  const [isAmbientListenOpen, setIsAmbientListenOpen] = useState(false)
+  const isFilmProject = selectedProject?.AIAgent === "Film Intelligence Specialist" || Boolean(scriptId)
+  const filteredProjects = useMemo(() => projects.filter((project) =>
+    `${project.ProjectName} ${project.AIAgent}`.toLowerCase().includes(projectSearch.toLowerCase()),
+  ), [projects, projectSearch])
 
-  const modalRef = useRef<HTMLDivElement>(null)
-  const titleRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const currentAnswerRef = useRef<HTMLDivElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => setFilmTab("Overview"), [selectedProject?.ProjectID])
 
-  // Animation refs to avoid re-renders during animations
-  const animationStateRef = useRef({
-    currentTitleIndex: 0,
-    currentPlaceholderIndex: 0,
-    titleFade: true,
-    placeholderFade: true,
-  })
-  const titleElementRef = useRef<HTMLDivElement>(null)
-  const placeholderElementRef = useRef<HTMLTextAreaElement>(null)
-  const mainTextareaControllerRef = useRef<TextareaController | null>(null)
-  const chatTextareaControllerRef = useRef<TextareaController | null>(null)
-  const chatDomRef = useRef<HTMLTextAreaElement>(null)
-  const isUserAtBottomRef = useRef(true)
-
-  // Memoized chatOptions to prevent recreating on every render
-  const chatOptions = useMemo(() => [
-    { option: "Public", icon: "public.png" },
-    { option: "Documents", icon: "Document.png" },
-    { option: "Insights", icon: "Saved_Insights.png" },
-  ], [])
-  const appendMessages = useCallback((incoming: any) => {
-    if (typeof incoming === "function") {
-      setMessages((prev) => {
-        const res = incoming(prev)
-        if (!res) return prev
-
-        if (Array.isArray(res) && res.length >= prev.length) {
-          let isPrefix = true
-          for (let i = 0; i < prev.length; i++) {
-            if (JSON.stringify(prev[i]) !== JSON.stringify(res[i])) {
-              isPrefix = false
-              break
-            }
-          }
-          if (isPrefix) return res
+  useEffect(() => {
+    if (!scriptId) return
+    let cancelled = false
+    fetch(`/api/film-projects/${encodeURIComponent(scriptId)}/`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+      .then((data) => {
+        if (cancelled || !data.project) return
+        const row = data.project
+        const title = selectedProject?.ProjectName || row.title || data.metadata?.title || data.metadata?.screenplay_title || row.file_name || "Film Project"
+        setProjectTitle(title)
+        if (!selectedProject || selectedProject.ProjectID !== row.project_id) {
+          setSelectedProject([{ ProjectID: row.project_id || `script-${scriptId}`, ProjectName: title, Summary: row.genre ? `${row.genre} screenplay analysis` : "Film Intelligence project", AIAgent: "Film Intelligence Specialist", CreatedBy: selectedProject?.CreatedBy || "", CreatedOn: row.created_at || new Date().toISOString().slice(0, 10), rowid: row.project_id || scriptId } as ProjectType])
         }
+      })
+      .catch((error) => console.error("Failed to hydrate film project", error))
+    return () => { cancelled = true }
+  }, [scriptId])
 
-        const toAppend = Array.isArray(res) ? res : [res]
-        const seen = new Set(prev.map((m) => (m.question || "") + "||" + (m.answer || "")))
-        const filtered = toAppend.filter((m) => {
-          const key = (m.question || "") + "||" + (m.answer || "")
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
+  useEffect(() => {
+    if (!projectMenuOpen) return
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setProjectMenuOpen(false) }
+    document.addEventListener("keydown", close)
+    return () => document.removeEventListener("keydown", close)
+  }, [projectMenuOpen])
+
+  useEffect(() => {
+    const projectId = selectedProject?.ProjectID
+    const loadId = ++requestRef.current
+    stopStreaming()
+    setActive(false)
+    setTurns([])
+    setHistoryError(null)
+    setHistoryLoading(Boolean(projectId))
+    setProjectTitle(selectedProject?.ProjectName || "")
+    if (!projectId) return
+
+    GetChatHistory(projectId, () => {})
+      .then((result) => {
+        if (requestRef.current !== loadId) return
+        const loaded: ChatTurn[] = result.history.flatMap((item: any, index: number) => {
+          const questionId = `history-${projectId}-${index}`
+          const saved = Boolean(item.count && Number(item.count) > 0)
+          return [
+            { id: `${questionId}-user`, role: "user" as const, status: "complete" as const, content: item.question, questionId },
+            { id: `${questionId}-assistant`, role: "assistant" as const, status: "complete" as const, content: item.answer, questionId, qid: item.qid, userlist: item.userlist, count: item.count, saved },
+          ]
         })
-        return [...prev, ...filtered]
+        setTurns(loaded)
       })
-    } else {
-      setMessages((prev) => {
-        if (!incoming) return prev
-        const incomingArr = Array.isArray(incoming) ? incoming : [incoming]
-        const seen = new Set(prev.map((m) => (m.question || "") + "||" + (m.answer || "")))
-        const filtered = incomingArr.filter((m) => {
-          const key = (m.question || "") + "||" + (m.answer || "")
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-        if (filtered.length === 0) return prev
-        return [...prev, ...filtered]
+      .catch((error) => {
+        if (requestRef.current === loadId) setHistoryError(error instanceof Error ? error.message : "Unable to load chat history.")
       })
+      .finally(() => {
+        if (requestRef.current === loadId) setHistoryLoading(false)
+      })
+
+    return () => {
+      if (requestRef.current === loadId) requestRef.current++
+      stopStreaming()
     }
+  }, [selectedProject?.ProjectID, historyAttempt])
 
-    // scroll to bottom after DOM updates (no animation)
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" })
-    }, 0)
+  const send = useCallback((question: string) => {
+    if (!selectedProject || active || !question.trim()) return
+    const requestId = ++requestRef.current
+    const questionId = makeId()
+    const assistantId = `${questionId}-assistant`
+    setTurns((current) => [...current,
+      { id: `${questionId}-user`, role: "user", status: "complete", content: question.trim(), questionId, source },
+      { id: assistantId, role: "assistant", status: "pending", content: "", questionId, source },
+    ])
+    setActive(true)
+
+    const updateAssistant = (patch: Partial<ChatTurn>) => {
+      if (requestRef.current !== requestId) return
+      setTurns((current) => current.map((turn) => turn.id === assistantId ? { ...turn, ...patch } : turn))
+    }
+    void getMessageResponse(question.trim(), source, selectedProject, {
+      onStart: () => updateAssistant({ status: "pending" }),
+      onChunk: (content) => updateAssistant({ status: "streaming", content }),
+      onComplete: (content) => { updateAssistant({ status: "complete", content }); if (requestRef.current === requestId) setActive(false) },
+      onCancel: (content) => { updateAssistant({ status: "cancelled", content }); if (requestRef.current === requestId) setActive(false) },
+      onError: (error, partial) => { updateAssistant({ status: "error", content: partial, error }); if (requestRef.current === requestId) setActive(false) },
+    })
+  }, [selectedProject, active, source])
+
+  const stop = useCallback(() => {
+    stopStreaming()
+    // Abort callbacks retain partial content and own the final status.
   }, [])
 
-  const projects = useProjectStore((state) => state.projects);
-  const setSelectedProject = useProjectStore((state) => state.setSelectedProject);
-  // Select the active project directly from the store so the component
-  // only re-runs effects when the project's identity (or its ID) changes.
-  const selectedProject = useProjectStore((state) => state.selectedProject[0] as ProjectType | undefined);
-  const isFilmProject = selectedProject?.AIAgent === "Film Intelligence Specialist" || Boolean(scriptIdFromUrl);
+  const originalQuestion = useCallback((assistant: ChatTurn) =>
+    turns.find((turn) => turn.role === "user" && turn.questionId === assistant.questionId)?.content || "",
+  [turns])
 
-  // When landing with ?script_id=, hydrate selected project from SQLite if needed
-  useEffect(() => {
-    if (!scriptIdFromUrl) return
+  const save = useCallback((turn: ChatTurn) => {
+    const nextSaved = !turn.saved
+    setTurns((current) => current.map((item) => item.id === turn.id ? { ...item, saved: nextSaved } : item))
+    void SaveToinsights(turn.qid || "", turn.userlist || "", turn.count || "", nextSaved)
+  }, [])
 
-    let cancelled = false
-    const hydrateFromScriptId = async () => {
-      try {
-        const res = await fetch(`/api/film-projects/${encodeURIComponent(scriptIdFromUrl)}/`)
-        if (!res.ok || cancelled) return
-        const data = await res.json()
-        const row = data.project
-        if (!row) return
-
-        const title =
-          selectedProject?.ProjectName ||
-          row.title ||
-          data.metadata?.title ||
-          data.metadata?.screenplay_title ||
-          data.metadata?.file_name ||
-          row.file_name ||
-          "Film Project"
-
-        setSelectedProjectTitle(title)
-
-        // If store project doesn't match, synthesize a film project entry
-        if (!selectedProject || selectedProject.ProjectID !== row.project_id) {
-          setSelectedProject([
-            {
-              ProjectID: row.project_id || `script-${scriptIdFromUrl}`,
-              ProjectName: title,
-              Summary: row.genre ? `${row.genre} screenplay analysis` : "Film Intelligence project",
-              AIAgent: "Film Intelligence Specialist",
-              CreatedBy: selectedProject?.CreatedBy || "",
-              CreatedOn: row.created_at || new Date().toISOString().split("T")[0],
-              rowid: row.project_id || scriptIdFromUrl,
-            } as ProjectType,
-          ])
-        }
-      } catch (e) {
-        console.error("Failed to hydrate project from script_id:", e)
-      }
+  const translate = useCallback((turn: ChatTurn) => {
+    if (turn.translated) {
+      setTurns((current) => current.map((item) => item.id === turn.id ? { ...item, translated: undefined } : item))
+      return
     }
+    void translateAnswer(turn.content, (text, code) => {
+      setTurns((current) => current.map((item) => item.id === turn.id ? { ...item, translated: { text, code } } : item))
+    }, (error) => console.error("Translation failed", error))
+  }, [])
 
-    hydrateFromScriptId()
-    return () => {
-      cancelled = true
-    }
-  }, [scriptIdFromUrl])
-
-  // Dynamic questions state for Popular Research Topics
-  const [tabQuestions, setTabQuestions] = useState<Record<string, string[]>>({});
-
-  // Ensure activeTab is valid for the current project
-  useEffect(() => {
-    const availableTabs = Object.keys(tabQuestions);
-    if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
-      setActiveTab(availableTabs[0]);
-    } else if (availableTabs.length > 0 && activeTab === "Inspiration" && !availableTabs.includes("Inspiration")) {
-      // If "Inspiration" (default) is not in the list, switch to the first available one
-      setActiveTab(availableTabs[0]);
-    }
-  }, [tabQuestions, activeTab]);
-
-  // debug: removed verbose logging to avoid noise during renders
-  // console.log('projectParamData--------------', projectParamData);
-
-  const filteredProjects = projects.filter(
-    (project) =>
-      project.ProjectName.toLowerCase().includes(projectSearch.toLowerCase()) ||
-      project.AIAgent.toLowerCase().includes(projectSearch.toLowerCase()),
-  )
-
-  // Pagination settings: show 4 projects per page
-  const projectsPerPage = 4
-  const totalPages = Math.ceil(filteredProjects.length / projectsPerPage)
-  const startIndex = (currentPage - 1) * projectsPerPage
-  const pageProjects = filteredProjects.slice(startIndex, startIndex + projectsPerPage)
-
-  // If filteredProjects changes such that currentPage is out of range, clamp it.
-  useEffect(() => {
-    if (totalPages === 0) {
-      setCurrentPage(1)
-    } else if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [totalPages, currentPage])
-
-  const handleProjectSelect = (project: ProjectType) => {
+  const chooseProject = (project: ProjectType) => {
+    stopStreaming()
+    requestRef.current++
+    setActive(false)
     setSelectedProject([project])
-    setSelectedProjectTitle(project.ProjectName)
-    setIsModalOpen(false)
-    setIsChatMode(false)
-    setMessages([])
-    setCurrentInput("")
+    setProjectMenuOpen(false)
     setProjectSearch("")
+    setFilmTab("Overview")
   }
 
-  const handleSave = useCallback((index: number, qid: string, userlist: string, count: string) => {
-    const isSaved = savedAnswers.has(index)
-    const newIsSaved = !isSaved
-
-    setSavedAnswers((prev) => {
-      const newSet = new Set(prev)
-      if (newIsSaved) {
-        newSet.add(index)
-      } else {
-        newSet.delete(index)
-      }
-      return newSet
-    })
-
-    SaveToinsights(qid, userlist, count, newIsSaved)
-  }, [savedAnswers])
-
-  const handleTranslate = useCallback((index: number) => {
-    const isCurrentlyTranslated = translatedAnswers.has(index);
-
-    if (isCurrentlyTranslated) {
-      // Toggle back to original
-      setTranslatedAnswers((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(index);
-        return newMap;
-      });
-    } else {
-      // Translate
-      const originalAnswer = messages[index]?.answer || "";
-      translateAnswer(
-        originalAnswer,
-        (translatedText, languageCode) => {
-          setTranslatedAnswers((prev) => {
-            const newMap = new Map(prev);
-            newMap.set(index, { text: translatedText, code: languageCode });
-            return newMap;
-          });
-        },
-        (error) => {
-          console.error("Translation failed:", error);
-          // Silently fail - do not show translation
-        }
-      );
-    }
-  }, [translatedAnswers, messages])
-
-  const handleCopyAnswer = useCallback((index: number) => {
-    const answer = new DOMParser()
-      .parseFromString(messages[index].answer, "text/html")
-      .body.textContent || "";
-
-    navigator.clipboard.writeText(answer);
-
-    setCopiedAnswer(index);
-    setTimeout(() => setCopiedAnswer(null), 2000);
-  }, [messages])
-
-  const handleCopy = useCallback((index: number) => {
-    setCopied(index)
-    setTimeout(() => setCopied(null), 2000)
-  }, [])
-
-  const toggleModal = useCallback(() => {
-    setIsModalOpen(!isModalOpen)
-  }, [isModalOpen])
-
-  const handleQuestionClick = useCallback(async (question: string) => {
-    setIsChatMode(true)
-    setCurrentInput("")
-    setPendingQuestion(question)
-    if (!selectedProject) {
-      console.warn("No project selected - cannot send question")
-      return
-    }
-
-    getMessageResponse(
-      question,
-      selectedVisibility,
-      selectedProject,
-      isTyping,
-      setIsTyping,
-      currentAnswerRef,
-      setTypingText,
-      appendMessages,
-      setPendingQuestion,
-      setIsChatActive,
-      setSendMessage,
-      setReadyForSendMessage
-    );
-    isUserAtBottomRef.current = true;
-  }, [selectedVisibility, selectedProject, isTyping, appendMessages])
-
-  const handleSendMessage = useCallback(async (text?: string) => {
-    setIsChatActive(true)
-    const question = (text ?? "").trim()
-    if (!question) return
-    setIsChatMode(true)
-    setPendingQuestion(question)
-    setCurrentInput("")
-    setReadyForSendMessage(false)
-    if (!selectedProject) {
-      console.warn("No project selected - cannot send question")
-      return
-    }
-
-    getMessageResponse(
-      question,
-      selectedVisibility,
-      selectedProject,
-      isTyping,
-      setIsTyping,
-      currentAnswerRef,
-      setTypingText,
-      appendMessages,
-      setPendingQuestion,
-      setIsChatActive,
-      setSendMessage,
-      setReadyForSendMessage
-    )
-    isUserAtBottomRef.current = true;
-  }, [selectedVisibility, selectedProject, isTyping, appendMessages])
-
-  const ChatWith = useCallback((selectedOption: string, optionIcon: string) => {
-    setSelectedVisibility(selectedOption)
-    setSelectedIcon(optionIcon)
-    setIsDropdownOpen(false)
-  }, [])
-
-  /* handleScroll removed - using existing definition below */
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-    // Also ensure container scrolls to max
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
-    }
-  }, [])
-
-  // input typing is handled by UncontrolledTextarea to avoid parent re-renders
-
-  // Title rotation animation - using DOM refs to avoid re-renders
-  useLayoutEffect(() => {
-    if (isChatMode || !titleElementRef.current) return
-
-    const titleInterval = setInterval(() => {
-      // Update fade out
-      if (titleElementRef.current) {
-        titleElementRef.current.style.opacity = "0"
-      }
-
-      setTimeout(() => {
-        // Update title index in ref
-        animationStateRef.current.currentTitleIndex =
-          (animationStateRef.current.currentTitleIndex + 1) % ROTATING_TITLES.length
-
-        // Update title text in DOM
-        if (titleElementRef.current) {
-          titleElementRef.current.textContent = ROTATING_TITLES[animationStateRef.current.currentTitleIndex]
-          titleElementRef.current.style.opacity = "1"
-        }
-      }, 500)
-    }, 4000)
-
-    return () => clearInterval(titleInterval)
-  }, [isChatMode])
-
-  // Placeholder rotation animation - using DOM refs to avoid re-renders
-  useLayoutEffect(() => {
-    if (isChatMode || pausePlaceholderAnimation || (placeholderElementRef.current?.value || "").length > 0 || !placeholderElementRef.current) return
-
-    const placeholderInterval = setInterval(() => {
-      // Abort animation if user has typed something
-      if (placeholderElementRef.current && placeholderElementRef.current.value.length > 0) return
-
-      // Update fade out
-      if (placeholderElementRef.current) {
-        placeholderElementRef.current.style.opacity = "0"
-      }
-
-      setTimeout(() => {
-        // Update placeholder index in ref
-        animationStateRef.current.currentPlaceholderIndex =
-          (animationStateRef.current.currentPlaceholderIndex + 1) % ROTATING_PLACEHOLDERS.length
-
-        // Update placeholder text in DOM
-        if (placeholderElementRef.current) {
-          placeholderElementRef.current.placeholder = ROTATING_PLACEHOLDERS[animationStateRef.current.currentPlaceholderIndex]
-          placeholderElementRef.current.style.opacity = "1"
-        }
-      }, 500)
-    }, 5000)
-
-    return () => clearInterval(placeholderInterval)
-  }, [isChatMode, pausePlaceholderAnimation, currentInput.length])
-
-
-  useEffect(() => {
-    let active = true
-    const loadHistory = async () => {
-      const projectId = selectedProject?.ProjectID
-
-      if (!projectId) {
-        if (active) {
-          setSelectedProjectTitle("")
-          setHistoryLoaded(true)
-        }
-        return
-      }
-
-      try {
-        // Use appendMessages but we handle the UI switch manually
-        const result = await GetChatHistory(projectId, appendMessages)
-
-        if (!active) return
-
-        // Set dynamic questions from API response or from the selected project
-        const questionsToUse = result.questions || selectedProject?.questions;
-        if (questionsToUse && typeof questionsToUse === 'object' && Object.keys(questionsToUse).length > 0) {
-          setTabQuestions(questionsToUse);
-        }
-
-        if (result.history && result.history.length > 0) {
-          // setMessages(result.history) // GetChatHistory already calls appendMessages which calls setMessages
-          setIsChatMode(true)
-
-          // Initialize savedAnswers based on UpVotedCount or UpvotedJSON
-          const newSavedAnswers = new Set<number>()
-          result.history.forEach((msg: any, idx: number) => {
-            // Check if UpVotedCount > 0 or if current user is in UpvotedJSON
-            if (msg.count && parseInt(msg.count) > 0) {
-              newSavedAnswers.add(idx)
-            } else if (msg.userlist) {
-              try {
-                const userList = JSON.parse(msg.userlist)
-                const currentUserEmail = selectedProject?.CreatedBy || ""
-                if (Array.isArray(userList) && userList.includes(currentUserEmail)) {
-                  newSavedAnswers.add(idx)
-                }
-              } catch (e) {
-                // If parsing fails, ignore
-              }
-            }
-          })
-          setSavedAnswers(newSavedAnswers)
-
-          setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" })
-          }, 0)
-        } else {
-          setIsChatMode(false)
-        }
-      } catch (err) {
-        if (active) console.error("Error loading chat history:", err)
-      } finally {
-        if (active) {
-          setSelectedProjectTitle(selectedProject?.ProjectName ?? "")
-          setHistoryLoaded(true)
-          // Clear the skip flag after history loads
-          try {
-            sessionStorage.removeItem("skipProjectDetailLoader")
-          } catch { }
-        }
-      }
-    }
-
-    loadHistory()
-    return () => { active = false }
-  }, [selectedProject?.ProjectID, selectedProject?.CreatedBy, appendMessages])
-
-  // Auto-scroll when a new question is pending (user submitted a question)
-  useEffect(() => {
-    if (pendingQuestion && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" })
-    }
-  }, [pendingQuestion])
-
-  // Auto-scroll during streaming response
-  useEffect(() => {
-    if (isTyping && typingText && scrollContainerRef.current) {
-      if (isUserAtBottomRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    }
-  }, [typingText, isTyping])
-
-  const handleScroll = useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    // Check if user is near bottom (within 100px tolerance)
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-    isUserAtBottomRef.current = isNearBottom;
-    setShowScrollButton(!isNearBottom);
-  }, [])
-
-  // Force scroll to bottom when chat mode activates or messages load initially
-  useEffect(() => {
-    if (isChatMode && messages.length > 0) {
-      // Using a small timeout to ensure DOM is ready
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" })
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-        }
-      }, 100)
-    }
-  }, [isChatMode, messages.length])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement
-
-      // Ignore Radix dialogs
-      if (target.closest("[data-radix-portal]")) return
-
-      if (
-        modalRef.current &&
-        !modalRef.current.contains(target) &&
-        titleRef.current &&
-        !titleRef.current.contains(target)
-      ) {
-        setIsModalOpen(false)
-      }
-
-      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
-        setIsDropdownOpen(false)
-      }
-    }
-
-    if (isModalOpen || isDropdownOpen) {
-      document.addEventListener("click", handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener("click", handleClickOutside)
-    }
-  }, [isModalOpen, isDropdownOpen])
-
-
-
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX || "";
-  const skipLoading = (() => {
-    try {
-      return sessionStorage.getItem("skipProjectDetailLoader") === "true"
-    } catch {
-      return false
-    }
-  })()
+  const film = <FilmWorkspace
+    projectId={urlProjectId || selectedProject?.ProjectID || ""}
+    scriptId={scriptId}
+    projectName={projectTitle}
+    userId={selectedProject?.user_id}
+    userEmail={selectedProject?.user_email || selectedProject?.CreatedBy}
+    fileName={selectedProject?.file_name}
+    fileUrl={selectedProject?.file_full_url}
+    generateIfMissing={generateIfMissing}
+    onAskRover={(question) => { setFilmTab("Ask Rover"); window.setTimeout(() => send(question), 0) }}
+    activeTab={filmTab}
+    setActiveTab={setFilmTab}
+  />
 
   return (
-    <div className="flex flex-col h-full bg-transparent relative">
-      {/* Header */}
-      <div className="px-8 pt-6 pb-4 relative">
-        <div
-          ref={titleRef}
-          onClick={toggleModal}
-          className="flex items-start gap-2 cursor-pointer hover:opacity-80 transition-opacity w-[1100px]"
-        >
-          <h1 className="text-lg font-normal text-foreground">{selectedProjectTitle.length > 200
-            ? `${selectedProjectTitle.slice(0, 200)}…`
-            : selectedProjectTitle}
-          </h1>
-          <div className="w-[30px] h-[30px]">
-            <ChevronDown size={25} className="text-muted-foreground" />
+    <div className="relative flex h-full min-h-0 flex-col bg-black/10">
+      <header className="relative z-30 shrink-0 px-4 pb-3 pt-5 sm:px-6 lg:px-8">
+        <button onClick={() => setProjectMenuOpen((open) => !open)} className="focus-ring flex max-w-[min(100%,900px)] items-center gap-2 rounded-lg text-left" aria-expanded={projectMenuOpen}>
+          <h1 className="truncate text-lg font-normal text-foreground">{projectTitle || "Select a project"}</h1><ChevronDown size={20} className="shrink-0 text-muted-foreground" />
+        </button>
+        {projectMenuOpen && <div className="rover-surface absolute left-4 top-full w-[min(480px,calc(100vw-2rem))] overflow-hidden sm:left-6" role="dialog" aria-label="Select project">
+          <div className="flex items-center justify-between border-b border-white/10 p-3"><span className="text-sm">All projects</span><Link href="/projects/project-create" className="focus-ring flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-medium text-black"><Plus size={14} /> New project</Link></div>
+          <div className="p-3"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} /><input autoFocus value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="Search projects" className="h-10 w-full rounded-lg border border-white/10 bg-black/20 pl-9 pr-3 text-sm outline-none focus:border-[#8f85ff]/60" /></div>
+            <div className="mt-2 max-h-[min(50vh,360px)] space-y-1 overflow-y-auto">{filteredProjects.map((project) => <button key={project.ProjectID} onClick={() => chooseProject(project)} className="focus-ring flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-white/[.05]"><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#776af2]/10 text-[#9e96ff]">{project.AIAgent === "Film Intelligence Specialist" ? <Film size={15} /> : "✦"}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm">{project.ProjectName}</span><span className="block truncate text-xs text-muted-foreground">{project.AIAgent}</span></span>{project.ProjectID === selectedProject?.ProjectID && <Check size={15} />}</button>)}{filteredProjects.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No projects found</p>}</div>
           </div>
-        </div>
+          <button onClick={() => setProjectMenuOpen(false)} aria-label="Close project selector" className="focus-ring absolute right-2 top-2 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 sm:hidden"><X size={16} /></button>
+        </div>}
+      </header>
 
-        {isModalOpen && (
-          <div
-            ref={modalRef}
-            className="absolute left-8 top-full mt-2 w-[520px] bg-[#1F1F1F] rounded-xl border border-border backdrop-blur-sm z-50 flex flex-col overflow-hidden"
-          >
-            {/* Modal Header */}
-            <div className="w-full flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <h2 className="text-base font-normal text-foreground">All Projects</h2>
-              </div>
-              <Link
-                href="/projects/project-create"
-                className="px-3 py-1.5 bg-background border border-[#282828] rounded-md text-sm text-foreground  transition-colors flex items-center gap-2 h-[37px] w-[138px] cursor-pointer"
-              >
-                <Image
-                  src={`${assetPrefix}/assets/icons/pen.svg`}
-                  alt="Pen Icon"
-                  width={16}
-                  height={16}
-                  className="block"
-                />
-                New Project
-              </Link>
-            </div>
-
-            <div className="p-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  defaultValue={projectSearch}
-                  ref={projectSearchRef}
-                  onChange={(e) => {
-                    if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current)
-                    const v = e.currentTarget.value
-                    searchDebounceRef.current = window.setTimeout(() => setProjectSearch(v), 250)
-                  }}
-                  onBlur={() => setProjectSearch(projectSearchRef.current?.value ?? "")}
-                  placeholder="Search here..."
-                  className="w-full pl-10 pr-3 py-2 border border-[#3B3B3B] rounded-md text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-purple-500/50 transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-2 max-h-[400px]">
-              {filteredProjects.length > 0 ? (
-                pageProjects.map((project, idx) => {
-                  return selectedProject?.ProjectID === project.ProjectID ? null : (
-                    <div
-                      key={project.ProjectID}
-                      onClick={() => handleProjectSelect(project)}
-                      className="p-3 rounded-lg border border-transparent
-                        hover:border-[#3C3C3C]
-                        hover:bg-muted/30
-                        transition-all
-                        cursor-pointer
-                        bg-[#191919] relative group"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <h3 className="text-sm font-medium text-foreground mb-1">
-                            {project.ProjectName.length > 200
-                              ? `${project.ProjectName.slice(0, 200)}…`
-                              : project.ProjectName
-                            }
-                          </h3>
-                          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                            <span className="text-primary">{project.AIAgent}</span>
-                            <div className="flex items-center gap-2 transition-opacity duration-200 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
-                              {project.CreatedOn && <span className="text-primary-text">{project.CreatedOn}</span>}
-                              <span className="text-muted-foreground">|</span>
-                              <UniversalPopup
-                                mode="email"
-                                title="Share Project"
-                                description="Enter an email address to share the project."
-                                trigger={
-                                  <button className="w-[31.29px] h-[31.29px] flex items-center justify-center rounded-full bg-[#201F1F] hover:bg-secondary text-icon-secondary hover:text-destructive cursor-pointer" >
-                                    <span><Image src={`${assetPrefix}/assets/icons/share.svg`} alt="Rover Logo" width={14} height={14} /></span>
-                                  </button>
-                                }
-                                onSend={(email) => ShareProject(project.ProjectID, "adduser", email)}
-                              />
-                              <UniversalPopup
-                                mode="delete"
-                                title="Delete Project?"
-                                description="This action cannot be undone."
-                                trigger={
-                                  <button
-                                    className="w-[31.29px] h-[31.29px] flex items-center justify-center rounded-full bg-[#201F1F] hover:bg-secondary text-icon-secondary hover:text-destructive cursor-pointer"
-                                  >
-                                    <Image
-                                      src={`${assetPrefix}/assets/icons/archive.svg`}
-                                      alt="Archive Icon"
-                                      width={14}
-                                      height={14}
-                                    />
-                                  </button>
-                                }
-                                onConfirm={async () => {
-                                  await ArchiveProjects("Yes", "Archive", project.rowid ?? "");
-                                  await GetProjectsController();
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="underline-gradient"></div>
-                      </div>
-                    </div>
-                  )
-                })
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm">No projects found</div>
-              )}
-            </div>
-
-            {/* Pagination (show only when more than one page) */}
-            {totalPages > 1 && (
-              <div className="p-4 flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  className="p-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 rounded text-sm transition-colors cursor-pointer ${currentPage === page
-                      ? "bg-[#75A5ED] text-white"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      } `}
-                  >
-                    {page}
-                  </button>
-                ))}
-
-                <button
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  className="p-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* If it's a Film project and active tab is NOT "Ask Rover", render Film Workspace panels directly */}
-      {isFilmProject ? (
-        activeFilmTab !== "Ask Rover" ? (
-          <FilmWorkspace
-            projectId={selectedProject?.ProjectID || ""}
-            scriptId={scriptIdFromUrl}
-            projectName={selectedProjectTitle}
-            onAskRover={(q) => {
-              setActiveFilmTab("Ask Rover");
-              handleQuestionClick(q);
-            }}
-            activeTab={activeFilmTab}
-            setActiveTab={setActiveFilmTab}
-          />
-        ) : (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <FilmWorkspace
-              projectId={selectedProject?.ProjectID || ""}
-              scriptId={scriptIdFromUrl}
-              projectName={selectedProjectTitle}
-              onAskRover={() => {}}
-              activeTab={activeFilmTab}
-              setActiveTab={setActiveFilmTab}
-            />
-            {/* Main Content - Scrollable */}
-            <div
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
-              className="flex-1 min-h-0 overflow-y-auto scrollbar-custom px-8 relative"
-            >
-              <div className={`pb-32 flex justify-center ${!isChatMode ? "pt-[180px]" : ""}`}>
-                <div className="w-[920px] space-y-12">
-                  {!historyLoaded && !skipLoading ? (
-                    <div className="h-48 flex items-center justify-center text-muted-foreground">Loading...</div>
-                  ) : isChatMode === "" ? <div className="h-48 flex items-center justify-center text-muted-foreground">Loading...</div>
-                    : !isChatMode ? (
-                      <>
-                        <div className="text-center mb-7">
-                          <div className="flex items-center pl-55 gap-3">
-                            <Image
-                              src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                              alt="Pen Icon"
-                              width={25}
-                              height={25}
-                              className="block"
-                            />
-                            <h2
-                              ref={titleElementRef}
-                              className="text-[29.88px] font-none transition-opacity duration-500 text-gradient opacity-100"
-                              style={{ transition: "opacity 500ms ease-in-out" }}
-                            >
-                              {ROTATING_TITLES[animationStateRef.current.currentTitleIndex]}
-                            </h2>
-                          </div>
-                        </div>
-
-                        <div className="mb-[35px]">
-                          <div className="rounded-2xl bg-[#1a1a1a] py-4 px-6 min-h-[113px] flex flex-col border border-[#3C3C3C]">
-                            <UncontrolledTextarea
-                              ref={mainTextareaControllerRef}
-                              domRef={placeholderElementRef}
-                              initialValue={currentInput}
-                              placeholder={ROTATING_PLACEHOLDERS[animationStateRef.current.currentPlaceholderIndex]}
-                              className="w-full text-primary-text focus:outline-none resize-none flex-1 text-base scrollbar-hide overflow-y-auto min-h-[43px] max-h-[182px] transition-opacity duration-500 opacity-100"
-                              onSend={(text) => handleSendMessage(text)}
-                              onBlurSync={(text) => setCurrentInput(text)}
-                              sendMessage={sendMessage}
-                            />
-                            <div className="flex items-center justify-between">
-                              <div className="relative" ref={dropdownRef}>
-                                <button
-                                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#3C3C3C]/50 border border-[#3a3a3a] text-sm text-foreground transition-colors cursor-pointer"
-                                >
-                                  <Image
-                                    src={`${assetPrefix}/assets/images/${selectedIcon}`}
-                                    alt={`${selectedProject} Image`}
-                                    width={16}
-                                    height={16}
-                                    className="block"
-                                  />
-                                  {selectedVisibility}
-                                  <ChevronDown className="w-3.5 h-3.5" />
-                                </button>
-
-                                {isDropdownOpen && (
-                                  <div className="absolute left-0 bottom-full mb-2 p-2 w-56 bg-[#1f1f1f] border border-[#3C3C3C] rounded-xl shadow-2xl overflow-hidden">
-
-                                    {chatOptions.map((catOpt, i) => {
-                                      return (
-                                        <button
-                                          key={i}
-                                          onClick={() => {
-                                            ChatWith(catOpt.option, catOpt.icon)
-                                          }}
-                                          className="w-full px-4 py-3 text-left text-sm hover:bg-[#3C3C3C] transition-colors flex items-center justify-between rounded-xl gap-3 text-foreground cursor-pointer"
-                                        >
-                                          <div className="flex items-center gap-3 cursor-pointer">
-                                            {/* <Globe className="w-4 h-4 text-[#5B8DEE]" /> */}
-                                            <Image
-                                              src={`${assetPrefix}/assets/images/${catOpt.icon}`}
-                                              alt={`${catOpt.option} Image`}
-                                              width={16}
-                                              height={16}
-                                              className="block"
-                                            />
-                                            <span>{catOpt.option}</span>
-                                          </div>
-                                          {selectedVisibility === catOpt.option && <Check className="w-4 h-4 text-green-500" />}
-                                        </button> 
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => setIsAmbientListenOpen(true)}
-                                  className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
-                                >
-                                  <Image
-                                    src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                                    alt="Ambient Listen"
-                                    width={14}
-                                    height={14}
-                                    className="object-contain"
-                                    unoptimized
-                                  />
-                                  <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
-                                </button>
-                                <button
-                                  onClick={() => mainTextareaControllerRef.current?.send()}
-                                  className="bg-[var(--color-icon-background)] flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"
-                                  disabled={isChatActive}
-                                >
-                                  <Image
-                                    src={`${assetPrefix}/assets/icons/papper-flight-black.svg`}
-                                    alt="Send Icon"
-                                    width={16}
-                                    height={16}
-                                    className="block"
-                                  />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-6">
-                          <h3 className="text-lg font-light text-foreground">Popular Research Topics</h3>
-
-                          {Object.keys(tabQuestions).length > 0 ? (
-                            <>
-                              <div className="flex gap-3 flex-wrap">
-                                {Object.keys(tabQuestions).map((tab) => (
-                                  <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`px-4 py-2 rounded-lg text-sm transition-colors flex-shrink-0 flex items-center cursor-pointer bg-[#0D0D0E] font-normal gap-2 relative ${activeTab === tab
-                                      ? "bg-muted text-foreground border border-border"
-                                      : "border border-border/60 text-foreground hover:border-border"
-                                      } `}
-                                  >
-                                    {tab === "Inspiration" && <Star className="w-4 h-4" />}
-                                    {tab === "Articles" && <FileText className="w-4 h-4" />}
-                                    {tab === "Case studies" && <Briefcase className="w-4 h-4" />}
-                                    {tab === "Trending Topics" && <TrendingUp className="w-4 h-4" />}
-                                    {tab === "Charts/Graphs" && <PieChart className="w-4 h-4" />}
-                                    {tab === "Comparisons" && <GitCompare className="w-4 h-4" />}
-                                    {tab}
-                                    {activeTab === tab && (
-                                      <div
-                                        className="
-                                        absolute 
-                                        -bottom-[9px] 
-                                        left-1/2 
-                                        -translate-x-1/2 
-                                        w-0 h-0 
-                                        border-l-[6px] border-l-transparent 
-                                        border-r-[6px] border-r-transparent 
-                                        border-t-[8px] border-t-muted
-                                      "
-                                      />
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
-
-                              <div>
-                                {tabQuestions[activeTab]?.map((question, idx) => (
-                                  <div
-                                    key={idx}
-                                    onClick={() => handleQuestionClick(question)}
-                                    className="rounded-lg px-4 py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/40"
-                                  >
-                                    <div className="flex items-start justify-between gap-4">
-                                      <p className="text-[13.88px] font-light text-foreground leading-relaxed">{question}</p>
-                                      <button className="flex-shrink-0 text-muted-foreground group-hover:text-foreground transition-colors">
-                                        <Image
-                                          src={`${assetPrefix}/assets/icons/move-up-left-arrow-white.svg`}
-                                          alt="Left Arrow Icon"
-                                          width={20}
-                                          height={20}
-                                          className="block"
-                                        />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-center py-8 text-muted-foreground text-sm">
-                              No research topics available for this project yet.
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {messages.map((msg, idx) => (
-                          <div key={idx} className="space-y-6">
-                            <div
-                              className="flex justify-end"
-                              onMouseEnter={() => setHoveredQuestion(idx)}
-                              onMouseLeave={() => setHoveredQuestion(null)}
-                            >
-                              <div className="relative max-w-[85%] bg-[#3C3C3C] rounded-2xl px-5 py-4 group">
-                                <p className="text-[13.88px] font-light text-foreground/90 leading-relaxed">{msg.question}</p>
-                              </div>
-                            </div>
-                            <MemoizedMarkdownRenderer
-                              content={(translatedAnswers.get(idx)?.text || msg.answer || "")}
-                            />
-
-                            <div className="border-t border-border border-dashed pt-4">
-                              <div className="flex gap-4 flex-wrap text-sm items-center">
-                                <button
-                                  onClick={() => handleSave(idx, msg.qid, msg.userlist, msg.count)}
-                                  className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border cursor-pointer"
-                                >
-                                  <Bookmark
-                                    size={16}
-                                    className={`${savedAnswers.has(idx) ? "fill-current text-[#75A5ED]" : "text-[#75A5ED]"}`}
-                                  />
-                                  {savedAnswers.has(idx) ? 'Un Save' : "Save"}
-                                </button>
-                                <button
-                                  disabled={false}
-                                  onClick={() => handleTranslate(idx)}
-                                  className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border cursor-pointer"
-                                >
-                                  {translatedAnswers.has(idx) ? (
-                                    <>
-                                      <span className="text-xs font-semibold text-[#75A5ED]">En</span>
-                                      Translate
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Languages size={16} className="text-[#75A5ED]" />
-                                      Translate
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleCopyAnswer(idx)}
-                                  className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border cursor-pointer"
-                                >
-                                  <Copy size={16} className="text-[#75A5ED]" />
-                                  {copiedAnswer === idx ? "Copied!" : "Copy"}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-
-                        {pendingQuestion && (
-                          <div className="space-y-6">
-                            <div className="flex justify-end">
-                              <div className="max-w-[85%] bg-[#3C3C3C] rounded-2xl px-5 py-4">
-                                <p className="text-[13.88px] font-light text-foreground/90 leading-relaxed">{pendingQuestion}</p>
-                              </div>
-                            </div>
-
-                            <div ref={currentAnswerRef}>
-                              {typingText ? (
-                                <div className="animate-fade-in">
-                                  <MarkdownRenderer content={typingText} key={typingText.length} />
-                                </div>
-                              ) : (
-                                <div className="flex items-center">
-                                  <div className="relative w-[20px] h-[20px] flex-shrink-0">
-                                    <Image
-                                      src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                                      alt="AI Loader"
-                                      fill
-                                      className="object-contain"
-                                      unoptimized
-                                    />
-                                  </div>
-                                  <ChatLoader />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        <div ref={messagesEndRef} />
-                      </>
-                    )}
-                </div>
-              </div>
-            </div>
-
-            {isChatMode && (
-              <div className="shrink-0 bg-transparent px-8 py-6">
-                <div className="max-w-[901px] mx-auto">
-                  <div className="border border-[#3C3C3C] rounded-lg bg-[#1a1a1a] p-4 min-h-[111px] flex flex-col">
-                    <UncontrolledTextarea
-                      ref={chatTextareaControllerRef}
-                      domRef={chatDomRef}
-                      initialValue={currentInput}
-                      placeholder={ROTATING_PLACEHOLDERS[animationStateRef.current.currentPlaceholderIndex]}
-                      className="w-full bg-transparent text-foreground focus:outline-none resize-none flex-1 text-base scrollbar-hide overflow-y-auto min-h-[43px] max-h-[182px] transition-opacity duration-500 opacity-100"
-                      onSend={(text) => handleSendMessage(text)}
-                      onBlurSync={(text) => setCurrentInput(text)}
-                      sendMessage={sendMessage}
-                    />
-                    <div className="flex items-center justify-between">
-                      <div className="relative" ref={dropdownRef}>
-                        <button
-                          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#3C3C3C]/50 border border-[#3a3a3a] text-sm text-foreground transition-colors cursor-pointer"
-                        >
-                          <Image
-                            src={`${assetPrefix}/assets/images/${selectedIcon}`}
-                            alt={`${selectedProject} Image`}
-                            width={16}
-                            height={16}
-                            className="block"
-                          />
-                          {selectedVisibility}
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-
-                        {isDropdownOpen && (
-                          <div className="absolute left-0 bottom-full mb-2 w-56 bg-[#1f1f1f] border border-border/60 rounded-xl shadow-2xl overflow-hidden">
-                            {chatOptions.map((catOpt, i) => {
-                              return (
-                                <button
-                                  key={i}
-                                  onClick={() => {
-                                    ChatWith(catOpt.option, catOpt.icon)
-                                  }}
-                                  className="w-full px-4 py-3 text-left text-sm hover:bg-[#3C3C3C] transition-colors flex items-center justify-between rounded-xl gap-3 text-foreground cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <Image
-                                      src={`${assetPrefix}/assets/images/${catOpt.icon}`}
-                                      alt={`${catOpt.option} Image`}
-                                      width={16}
-                                      height={16}
-                                      className="block"
-                                    />
-                                    <span>{catOpt.option}</span>
-                                  </div>
-                                  {selectedVisibility === catOpt.option && <Check className="w-4 h-4 text-green-500" />}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setIsAmbientListenOpen(true)}
-                          className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
-                        >
-                          <Image
-                            src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                            alt="Ambient Listen"
-                            width={14}
-                            height={14}
-                            className="object-contain"
-                            unoptimized
-                          />
-                          <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
-                        </button>
-                        {sendMessage ? (
-                          <button
-                            onClick={() => stopStreaming(setSendMessage)}
-                            className="bg-[var(--color-icon-background)] flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"
-                            disabled={!isChatActive}
-                          >
-                            <Image
-                              src={`${assetPrefix}/assets/icons/squire.svg`}
-                              alt="Squire Icon"
-                              width={16}
-                              height={16}
-                              className="block"
-                            />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => chatTextareaControllerRef.current?.send()}
-                            className="bg-white flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"
-                            disabled={sendMessage}
-                          >
-                            <Image
-                              src={`${assetPrefix}/assets/icons/papper-flight-black.svg`}
-                              alt="Send Icon"
-                              width={16}
-                              height={16}
-                              className="block"
-                            />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      ) : (
-        <>
-          {/* Main Content - Scrollable */}
-          <div
-            ref={scrollContainerRef}
-            onScroll={handleScroll}
-            className="flex-1 min-h-0 overflow-y-auto scrollbar-custom px-8 relative"
-          >
-            <div className={`pb-32 flex justify-center ${!isChatMode ? "pt-[180px]" : ""}`}>
-              <div className="w-[920px] space-y-12">
-                {!historyLoaded && !skipLoading ? (
-                  <div className="h-48 flex items-center justify-center text-muted-foreground">Loading...</div>
-                ) : isChatMode === "" ? <div className="h-48 flex items-center justify-center text-muted-foreground">Loading...</div>
-                  : !isChatMode ? (
-                    <>
-                      <div className="text-center mb-7">
-                        <div className="flex items-center pl-55 gap-3">
-                          <Image
-                            src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                            alt="Pen Icon"
-                            width={25}
-                            height={25}
-                            className="block"
-                          />
-                          <h2
-                            ref={titleElementRef}
-                            className="text-[29.88px] font-none transition-opacity duration-500 text-gradient opacity-100"
-                            style={{ transition: "opacity 500ms ease-in-out" }}
-                          >
-                            {ROTATING_TITLES[animationStateRef.current.currentTitleIndex]}
-                          </h2>
-                        </div>
-                      </div>
-
-                      <div className="mb-[35px]">
-                        <div className="rounded-2xl bg-[#1a1a1a] py-4 px-6 min-h-[113px] flex flex-col border border-[#3C3C3C]">
-                          <UncontrolledTextarea
-                            ref={mainTextareaControllerRef}
-                            domRef={placeholderElementRef}
-                            initialValue={currentInput}
-                            placeholder={ROTATING_PLACEHOLDERS[animationStateRef.current.currentPlaceholderIndex]}
-                            className="w-full text-primary-text focus:outline-none resize-none flex-1 text-base scrollbar-hide overflow-y-auto min-h-[43px] max-h-[182px] transition-opacity duration-500 opacity-100"
-                            onSend={(text) => handleSendMessage(text)}
-                            onBlurSync={(text) => setCurrentInput(text)}
-                            sendMessage={sendMessage}
-                          />
-                          <div className="flex items-center justify-between">
-                            <div className="relative" ref={dropdownRef}>
-                              <button
-                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#3C3C3C]/50 border border-[#3a3a3a] text-sm text-foreground transition-colors cursor-pointer"
-                              >
-                                <Image
-                                  src={`${assetPrefix}/assets/images/${selectedIcon}`}
-                                  alt={`${selectedProject} Image`}
-                                  width={16}
-                                  height={16}
-                                  className="block"
-                                />
-                                {selectedVisibility}
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              </button>
-
-                              {isDropdownOpen && (
-                                <div className="absolute left-0 bottom-full mb-2 p-2 w-56 bg-[#1f1f1f] border border-[#3C3C3C] rounded-xl shadow-2xl overflow-hidden">
-
-                                  {chatOptions.map((catOpt, i) => {
-                                    return (
-                                      <button
-                                        key={i}
-                                        onClick={() => {
-                                          ChatWith(catOpt.option, catOpt.icon)
-                                        }}
-                                        className="w-full px-4 py-3 text-left text-sm hover:bg-[#3C3C3C] transition-colors flex items-center justify-between rounded-xl gap-3 text-foreground cursor-pointer"
-                                      >
-                                        <div className="flex items-center gap-3 cursor-pointer">
-                                          {/* <Globe className="w-4 h-4 text-[#5B8DEE]" /> */}
-                                          <Image
-                                            src={`${assetPrefix}/assets/images/${catOpt.icon}`}
-                                            alt={`${catOpt.option} Image`}
-                                            width={16}
-                                            height={16}
-                                            className="block"
-                                          />
-                                          <span>{catOpt.option}</span>
-                                        </div>
-                                        {selectedVisibility === catOpt.option && <Check className="w-4 h-4 text-green-500" />}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => setIsAmbientListenOpen(true)}
-                                className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
-                              >
-                                <Image
-                                  src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                                  alt="Ambient Listen"
-                                  width={14}
-                                  height={14}
-                                  className="object-contain"
-                                  unoptimized
-                                />
-                                <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
-                              </button>
-                              <button
-                                onClick={() => mainTextareaControllerRef.current?.send()}
-                                className="bg-[var(--color-icon-background)] flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"
-                                disabled={isChatActive}
-                              >
-                                <Image
-                                  src={`${assetPrefix}/assets/icons/papper-flight-black.svg`}
-                                  alt="Send Icon"
-                                  width={16}
-                                  height={16}
-                                  className="block"
-                                />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <h3 className="text-lg font-light text-foreground">Popular Research Topics</h3>
-
-                        {Object.keys(tabQuestions).length > 0 ? (
-                          <>
-                            <div className="flex gap-3 flex-wrap">
-                              {Object.keys(tabQuestions).map((tab) => (
-                                <button
-                                  key={tab}
-                                  onClick={() => setActiveTab(tab)}
-                                  className={`px-4 py-2 rounded-lg text-sm transition-colors flex-shrink-0 flex items-center cursor-pointer bg-[#0D0D0E] font-normal gap-2 relative ${activeTab === tab
-                                    ? "bg-muted text-foreground border border-border"
-                                    : "border border-border/60 text-foreground hover:border-border"
-                                    } `}
-                                >
-                                  {tab === "Inspiration" && <Star className="w-4 h-4" />}
-                                  {tab === "Articles" && <FileText className="w-4 h-4" />}
-                                  {tab === "Case studies" && <Briefcase className="w-4 h-4" />}
-                                  {tab === "Trending Topics" && <TrendingUp className="w-4 h-4" />}
-                                  {tab === "Charts/Graphs" && <PieChart className="w-4 h-4" />}
-                                  {tab === "Comparisons" && <GitCompare className="w-4 h-4" />}
-                                  {tab}
-                                  {activeTab === tab && (
-                                    <div
-                                      className="
-                                      absolute 
-                                      -bottom-[9px] 
-                                      left-1/2 
-                                      -translate-x-1/2 
-                                      w-0 h-0 
-                                      border-l-[6px] border-l-transparent 
-                                      border-r-[6px] border-r-transparent 
-                                      border-t-[8px] border-t-muted
-                                    "
-                                    />
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-
-                            <div>
-                              {tabQuestions[activeTab]?.map((question, idx) => (
-                                <div
-                                  key={idx}
-                                  onClick={() => handleQuestionClick(question)}
-                                  className="rounded-lg px-4 py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/40"
-                                >
-                                  <div className="flex items-start justify-between gap-4">
-                                    <p className="text-[13.88px] font-light text-foreground leading-relaxed">{question}</p>
-                                    <button className="flex-shrink-0 text-muted-foreground group-hover:text-foreground transition-colors">
-                                      <Image
-                                        src={`${assetPrefix}/assets/icons/move-up-left-arrow-white.svg`}
-                                        alt="Left Arrow Icon"
-                                        width={20}
-                                        height={20}
-                                        className="block"
-                                      />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground text-sm">
-                            No research topics available for this project yet.
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {messages.map((msg, idx) => (
-                        <div key={idx} className="space-y-6">
-                          <div
-                            className="flex justify-end"
-                            onMouseEnter={() => setHoveredQuestion(idx)}
-                            onMouseLeave={() => setHoveredQuestion(null)
-                            }
-                          >
-                            <div className="relative max-w-[85%] bg-[#3C3C3C] rounded-2xl px-5 py-4 group">
-                              <p className="text-[13.88px] font-light text-foreground/90 leading-relaxed">{msg.question}</p>
-                            </div>
-                          </div>
-                          <MemoizedMarkdownRenderer
-                            content={
-                              (translatedAnswers.get(idx)?.text || msg.answer || "")
-                            }
-                          />
-
-                          <div className="border-t border-border border-dashed pt-4">
-                            <div className="flex gap-4 flex-wrap text-sm items-center">
-                              <button
-                                onClick={() => handleSave(idx, msg.qid, msg.userlist, msg.count)}
-                                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border cursor-pointer"
-                              >
-                                <Bookmark
-                                  size={16}
-                                  className={`${savedAnswers.has(idx) ? "fill-current text-[#75A5ED]" : "text-[#75A5ED]"} `}
-                                />
-                                {savedAnswers.has(idx) ? 'Un Save' : "Save"}
-                              </button>
-                              <button
-                                disabled={false}
-                                onClick={() => handleTranslate(idx)}
-                                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border cursor-pointer"
-                              >
-                                {translatedAnswers.has(idx) ? (
-                                  <>
-                                    <span className="text-xs font-semibold text-[#75A5ED]">En</span>
-                                    Translate
-                                  </>
-                                ) : (
-                                  <>
-                                    <Languages size={16} className="text-[#75A5ED]" />
-                                    Translate
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleCopyAnswer(idx)}
-                                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border cursor-pointer"
-                              >
-                                <Copy size={16} className="text-[#75A5ED]" />
-                                {copiedAnswer === idx ? "Copied!" : "Copy"}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {pendingQuestion && (
-                        <div className="space-y-6">
-                          <div className="flex justify-end">
-                            <div className="max-w-[85%] bg-[#3C3C3C] rounded-2xl px-5 py-4">
-                              <p className="text-[13.88px] font-light text-foreground/90 leading-relaxed">{pendingQuestion}</p>
-                            </div>
-                          </div>
-
-                          <div ref={currentAnswerRef}>
-                            {typingText ? (
-                              <div className="animate-fade-in">
-                                <MarkdownRenderer content={typingText} key={typingText.length} />
-                              </div>
-                            ) : <div className="flex items-center">
-                              <div className="relative w-[20px] h-[20px] flex-shrink-0">
-                                <Image
-                                  src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                                  alt="AI Loader"
-                                  fill
-                                  className="object-contain"
-                                  unoptimized
-                                />
-                              </div>
-
-                              <ChatLoader />
-                            </div>
-                            }
-                          </div>
-                        </div>
-                      )}
-
-                      <div ref={messagesEndRef} />
-                    </>
-                  )}
-              </div>
-            </div>
-          </div>
-
-          {
-            isChatMode && (
-              <div className="shrink-0 bg-transparent px-8 py-6">
-                <div className="max-w-[901px] mx-auto">
-                  <div className="border border-[#3C3C3C] rounded-lg bg-[#1a1a1a] p-4 min-h-[111px] flex flex-col">
-                    <UncontrolledTextarea
-                      ref={chatTextareaControllerRef}
-                      domRef={chatDomRef}
-                      initialValue={currentInput}
-                      placeholder={ROTATING_PLACEHOLDERS[animationStateRef.current.currentPlaceholderIndex]}
-                      className="w-full bg-transparent text-foreground focus:outline-none resize-none flex-1 text-base scrollbar-hide overflow-y-auto min-h-[43px] max-h-[182px] transition-opacity duration-500 opacity-100"
-                      onSend={(text) => handleSendMessage(text)}
-                      onBlurSync={(text) => setCurrentInput(text)}
-                      sendMessage={sendMessage}
-                    />
-                    <div className="flex items-center justify-between">
-                      <div className="relative" ref={dropdownRef}>
-                        <button
-                          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#3C3C3C]/50 border border-[#3a3a3a] text-sm text-foreground transition-colors cursor-pointer"
-                        >
-                          <Image
-                            src={`${assetPrefix}/assets/images/${selectedIcon}`}
-                            alt={`${selectedProject} Image`}
-                            width={16}
-                            height={16}
-                            className="block"
-                          />
-                          {selectedVisibility}
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-
-                        {isDropdownOpen && (
-                          <div className="absolute left-0 bottom-full mb-2 w-56 bg-[#1f1f1f] border border-border/60 rounded-xl shadow-2xl overflow-hidden">
-                            {chatOptions.map((catOpt, i) => {
-                              return (
-                                <button
-                                  key={i}
-                                  onClick={() => {
-                                    ChatWith(catOpt.option, catOpt.icon)
-                                  }}
-                                  className="w-full px-4 py-3 text-left text-sm hover:bg-[#3C3C3C] transition-colors flex items-center justify-between rounded-xl gap-3 text-foreground cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    {/* <Globe className="w-4 h-4 text-[#5B8DEE]" /> */}
-                                    <Image
-                                      src={`${assetPrefix}/assets/images/${catOpt.icon}`}
-                                      alt={`${catOpt.option} Image`}
-                                      width={16}
-                                      height={16}
-                                      className="block"
-                                    />
-                                    <span>{catOpt.option}</span>
-                                  </div>
-                                  {selectedVisibility === catOpt.option && <Check className="w-4 h-4 text-green-500" />}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setIsAmbientListenOpen(true)}
-                          className="flex items-center gap-1.5 bg-[#75A5ED]/10 border border-[#75A5ED]/30 text-[#75A5ED] hover:bg-[#75A5ED]/20 hover:border-[#75A5ED]/50 rounded-full px-3 py-1.5 transition-all shadow-sm cursor-pointer"
-                        >
-                          <Image
-                            src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                            alt="Ambient Listen"
-                            width={14}
-                            height={14}
-                            className="object-contain"
-                            unoptimized
-                          />
-                          <span className="text-xs font-semibold whitespace-nowrap">Ambient Listen</span>
-                        </button>
-                        {sendMessage ?
-                          <button
-                            onClick={() => stopStreaming(setSendMessage)}
-                            className="bg-[var(--color-icon-background)] flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"
-                            disabled={!isChatActive}
-                          >
-                            <Image
-                              src={`${assetPrefix}/assets/icons/squire.svg`}
-                              alt="Squire Icon"
-                              width={16}
-                              height={16}
-                              className="block"
-                            />
-                          </button>
-                          : <button
-                            onClick={() => chatTextareaControllerRef.current?.send()}
-                            className={"bg-white flex item-center justify-center text-foreground rounded-lg p-1.5 transition-colors cursor-pointer h-[30px] w-[30px]"}
-                            disabled={sendMessage}
-                          >
-                            <Image
-                              src={`${assetPrefix}/assets/icons/papper-flight-black.svg`}
-                              alt="Send Icon"
-                              width={16}
-                              height={16}
-                              className="block"
-                            />
-                          </button>
-                        }
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          }
-        </>
-      )}
-
-      {/* Scroll to Bottom Button */}
-      {showScrollButton && (
-        <div className="absolute bottom-[200px] left-0 w-full px-8 pointer-events-none z-50">
-          <div className="max-w-[901px] mx-auto relative">
-            <button
-              onClick={scrollToBottom}
-              className="absolute bottom-0 right-6 pointer-events-auto p-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#333] hover:border-[#444] transition-all shadow-xl group animate-in fade-in zoom-in duration-300 cursor-pointer"
-              aria-label="Scroll to bottom"
-            >
-              <ArrowDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </button>
-          </div>
-        </div>
-      )}
-      {isAmbientListenOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#111] border border-[#333] rounded-3xl p-10 flex flex-col items-center justify-center gap-8 relative shadow-2xl max-w-sm w-full mx-4">
-            <button
-              onClick={() => setIsAmbientListenOpen(false)}
-              className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            
-            <div className="relative flex items-center justify-center mt-4 h-32 w-32">
-              <div className="absolute w-32 h-32 bg-[#75A5ED]/20 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
-              <div className="absolute w-24 h-24 bg-[#75A5ED]/40 rounded-full animate-ping" style={{ animationDuration: '1.5s', animationDelay: '0.2s' }} />
-              <Image
-                src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
-                alt="Listening"
-                width={80}
-                height={80}
-                className="relative z-10 object-contain drop-shadow-[0_0_15px_rgba(117,165,237,0.5)]"
-                unoptimized
-              />
-            </div>
-            
-            <div className="text-center space-y-2 mb-2 relative z-10">
-              <h3 className="text-xl font-medium text-foreground tracking-tight">Listening...</h3>
-              <p className="text-sm text-muted-foreground">Go ahead, I'm listening.</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div >
+      {isFilmProject ? <div className="flex min-h-0 flex-1 flex-col">{film}{filmTab === "Ask Rover" && <ChatWorkspace projectName={projectTitle} turns={turns} loading={historyLoading} historyError={historyError} active={active} source={source} onSourceChange={setSource} onSend={send} onStop={stop} onRetryHistory={() => setHistoryAttempt((value) => value + 1)} onSave={save} onTranslate={translate} onRegenerate={(turn) => send(originalQuestion(turn))} />}</div> : <ChatWorkspace projectName={projectTitle} turns={turns} loading={historyLoading} historyError={historyError} active={active} source={source} onSourceChange={setSource} onSend={send} onStop={stop} onRetryHistory={() => setHistoryAttempt((value) => value + 1)} onSave={save} onTranslate={translate} onRegenerate={(turn) => send(originalQuestion(turn))} />}
+    </div>
   )
 }
-

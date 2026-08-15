@@ -1,6 +1,13 @@
 // Client-side mock fetch interceptor
 "use client";
 
+import {
+  STATIC_FILM_ANALYSIS,
+  STATIC_FILM_METADATA,
+  STATIC_PROJECT_ID,
+  STATIC_SCRIPT_ID,
+} from "@/lib/static-film-data";
+
 if (typeof window !== "undefined") {
   // Save original fetch
   const originalFetch = window.fetch;
@@ -180,6 +187,95 @@ if (typeof window !== "undefined") {
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const urlStr = input.toString();
 
+    // The old Next API stored film-project UI state in SQLite. A static app has
+    // no server filesystem, so keep the same response contract in localStorage.
+    if (urlStr.startsWith("/api/film-projects")) {
+      const storageKey = "rover_film_projects";
+      const readProjects = () => {
+        const stored = JSON.parse(localStorage.getItem(storageKey) || "[]");
+        if (stored.length) return stored;
+        const initial = [{
+          script_id: STATIC_SCRIPT_ID,
+          project_id: STATIC_PROJECT_ID,
+          title: STATIC_FILM_METADATA.title,
+          filename: STATIC_FILM_METADATA.filename,
+          language: STATIC_FILM_METADATA.language,
+          genre: STATIC_FILM_METADATA.genre,
+          target_market: STATIC_FILM_METADATA.targetMarket,
+          release_strategy: STATIC_FILM_METADATA.releaseStrategy,
+          expected_budget: STATIC_FILM_METADATA.expectedBudget,
+          file_url: null,
+          metadata_json: JSON.stringify(STATIC_FILM_METADATA),
+          analysis_json: JSON.stringify(STATIC_FILM_ANALYSIS),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }];
+        localStorage.setItem(storageKey, JSON.stringify(initial));
+        return initial;
+      };
+      const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      });
+      const method = (init?.method || "GET").toUpperCase();
+      const path = urlStr.split("?")[0].replace(/\/$/, "");
+      const detailMatch = path.match(/^\/api\/film-projects\/([^/]+)$/);
+
+      if (method === "POST" && !detailMatch) {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const projects = readProjects();
+        const scriptId = body.script_id || body.scriptId || STATIC_SCRIPT_ID;
+        const now = new Date().toISOString();
+        const existing = projects.find((item: any) => item.script_id === scriptId);
+        const row = {
+          ...existing,
+          script_id: scriptId,
+          project_id: body.project_id || body.projectId || existing?.project_id || STATIC_PROJECT_ID,
+          title: body.title || body.projectName || existing?.title || STATIC_FILM_METADATA.title,
+          filename: body.filename ?? existing?.filename ?? null,
+          language: body.language ?? existing?.language ?? null,
+          genre: body.genre ?? existing?.genre ?? null,
+          target_market: body.target_market ?? body.targetMarket ?? existing?.target_market ?? null,
+          release_strategy: body.release_strategy ?? body.releaseStrategy ?? existing?.release_strategy ?? null,
+          expected_budget: body.expected_budget ?? body.expectedBudget ?? existing?.expected_budget ?? null,
+          file_url: body.file_url ?? existing?.file_url ?? null,
+          metadata_json: JSON.stringify(body.metadata || {}),
+          analysis_json: JSON.stringify(body.analysis || { sections: {} }),
+          created_at: existing?.created_at || now,
+          updated_at: now,
+        };
+        const next = existing
+          ? projects.map((item: any) => item.script_id === scriptId ? row : item)
+          : [row, ...projects];
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        return json({ project: row, static: true });
+      }
+
+      if (method === "GET" && detailMatch) {
+        const scriptId = decodeURIComponent(detailMatch[1]);
+        const project = readProjects().find((item: any) => item.script_id === scriptId);
+        if (!project) return json({ error: "Film project not found" }, 404);
+        return json({
+          script_id: scriptId,
+          project,
+          file_url: project.file_url,
+          metadata: JSON.parse(project.metadata_json || "{}"),
+          analysis: JSON.parse(project.analysis_json || "{\"sections\":{}}"),
+          workflowError: null,
+          static: true,
+        });
+      }
+
+      if (method === "GET") return json({ projects: readProjects() });
+      return json({ error: "Unsupported static API operation" }, 405);
+    }
+
+    // Live workflows are the default. Opt into the browser demo responses for
+    // offline development with VITE_ENABLE_MOCKS=true.
+    if (import.meta.env.VITE_ENABLE_MOCKS !== "true") {
+      return originalFetch(input, init);
+    }
+
     // Check if it's one of our backend integrations
     const isMockTarget =
       urlStr.includes("ai-demo.vizru-ras.com") ||
@@ -196,6 +292,15 @@ if (typeof window !== "undefined") {
     // handshake credential has to come from the live platform too.
     const PASSTHROUGH = [
       "6a7eceb5f8dec4e8a9054b52", // socket handshake token
+      "6a808ee4c2d02f1db00f8ee3", // database user details
+      "6a8092676a4c74d61e08e6e2", // database project creation
+      "6a8091a187061342c60acce2", // database project list
+      "6a809e65547065464e019593", // save generated film dashboard
+      "6a80a0f6547065464e019594", // load saved film dashboards
+      "6a80acced616afc2d905109d", // load one saved film dashboard
+      "6a80c45a6887dec5dc0bbc88", // retrieve project conversation history
+      "6a80c8c32b3b61a48101e458", // insert a completed conversation message
+      "6a75d645d22b6778627fdfd2", // Ask Rover response generation
       "roverscriptdemo6a7ad4f143079", // film upload workflow
       "roverscriptdemodetails6a7b1a94831b3", // film metadata workflow
       "roverscriptdemocontentsparent6a7ea1c86776c", // film summarize workflow
@@ -487,23 +592,6 @@ if (typeof window !== "undefined") {
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
-    }
-
-    // 24. STRIPE PAYMENT/PRICING
-    if (urlStr.includes("createstripecheckoutsession68faedae08428")) {
-      return new Response(JSON.stringify([{ url: "/projects" }]), { status: 200, headers: { "Content-Type": "application/json" } });
-    }
-    if (urlStr.includes("roverv2stripepaymentdetails695f4afdd30a0")) {
-      return new Response(
-        JSON.stringify([
-          {
-            amount: 0,
-            status: "active",
-            plan: "Free Developer Sandbox"
-          }
-        ]),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
     }
 
     // Fallback for other workflow executions

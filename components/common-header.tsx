@@ -9,12 +9,12 @@ const CommonHeader: React.FC = () => {
 
   // Return empty placeholder with same dimensions to prevent layout jump
   if (!selectedProject) {
-    return <header className="w-full h-16 bg-transparent flex items-center px-8" />
+    return <header className="flex h-16 w-full items-center bg-transparent px-4 sm:px-6 lg:px-8" />
   }
 
   return (
-    <header className="w-full h-16 bg-transparent flex items-center px-8">
-      <h1 className="text-lg font-normal text-foreground">
+    <header className="flex h-16 w-full items-center bg-transparent px-4 sm:px-6 lg:px-8">
+      <h1 className="truncate text-base font-normal text-foreground sm:text-lg" title={selectedProject.ProjectName}>
         {selectedProject.ProjectName.length > 200
           ? `${selectedProject.ProjectName.slice(0, 200)}…`
           : selectedProject.ProjectName}

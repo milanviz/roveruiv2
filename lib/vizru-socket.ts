@@ -69,6 +69,9 @@ let generation = 0;
  */
 const handlers = new Map<string, Set<Handler>>();
 
+/** Tags already attached to the current socket instance. */
+const boundTags = new Set<string>();
+
 const stateListeners = new Set<(value: SocketState) => void>();
 
 function setState(value: SocketState) {
@@ -176,7 +179,8 @@ function announceUser(socketToken: string) {
 
 /** Attach one tag to the live socket. */
 function bind(tag: string) {
-  if (!socket) return;
+  if (!socket || boundTags.has(tag)) return;
+  boundTags.add(tag);
 
   socket.on(tag, (payload: any) => {
     const set = handlers.get(tag);
@@ -300,6 +304,8 @@ export function disconnectVizruSocket(): void {
   generation++;
 
   if (!socket) {
+    boundTags.clear();
+    handlers.clear();
     setState("idle");
     return;
   }
@@ -307,6 +313,7 @@ export function disconnectVizruSocket(): void {
   socket.removeAllListeners();
   socket.disconnect();
   socket = null;
+  boundTags.clear();
   handlers.clear();
   setState("idle");
 }
@@ -325,6 +332,7 @@ export async function reconnectVizruSocket(): Promise<void> {
     socket.disconnect();
     socket = null;
   }
+  boundTags.clear();
   handlers.clear();
   setState("idle");
 
@@ -366,6 +374,31 @@ export function onVizruEvent(tag: string, handler: Handler): () => void {
 
 export function getVizruSocketState(): SocketState {
   return state;
+}
+
+/** Wait until the shared socket can receive events, with a bounded fallback. */
+export async function waitForVizruSocketConnection(timeoutMs = 12000): Promise<boolean> {
+  await connectVizruSocket();
+  if (state === "connected") return true;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (connected: boolean) => {
+      if (settled) return;
+      settled = true;
+      stateListeners.delete(listener);
+      window.clearTimeout(timer);
+      resolve(connected);
+    };
+    const listener = (value: SocketState) => {
+      if (value === "connected") finish(true);
+      else if (value === "error") finish(false);
+    };
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+
+    stateListeners.add(listener);
+    listener(state);
+  });
 }
 
 export function onVizruSocketState(listener: (value: SocketState) => void): () => void {

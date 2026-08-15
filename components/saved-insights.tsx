@@ -12,9 +12,11 @@ import { InsightType } from "@/types/ask-rover-types"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx"
-import Image from "next/image"
+import { Image, useRouter } from "@/lib/spa-router"
 import MarkdownRenderer from "./markdownrenderer"
-import { useRouter } from "next/navigation";
+import { ASSET_PREFIX } from "@/lib/env"
+import { toast } from "sonner"
+import { PageState, Skeleton } from "@/components/ui/async-state"
 
 
 const MemoizedMarkdownRenderer = memo(MarkdownRenderer);
@@ -170,7 +172,7 @@ function stripHtmlAndDecode(html: string): string {
 
 export default function SavedInsightsContent() {
     const { selectedProject, hydrated } = useProjectStore()
-    const { insightsList } = useAskRoverStore()
+    const { insightsList, insightsStatus, insightsError } = useAskRoverStore()
     const [sourceFilter, setSourceFilter] = useState("All")
     const [userFilter, setUserFilter] = useState("All")
     const [userFilterValue, setUserFilterValue] = useState("All")
@@ -236,6 +238,13 @@ export default function SavedInsightsContent() {
     const toggleDropdown = (dropdown: string) => {
         setOpenDropdown(openDropdown === dropdown ? null : dropdown)
     }
+
+    useEffect(() => {
+        if (!openDropdown) return
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpenDropdown(null) }
+        document.addEventListener("keydown", closeOnEscape)
+        return () => document.removeEventListener("keydown", closeOnEscape)
+    }, [openDropdown])
 
     useEffect(() => {
         if (!hydrated) return
@@ -511,9 +520,10 @@ export default function SavedInsightsContent() {
 
             // Save the PDF
             pdf.save('insights.pdf');
+            toast.success('PDF exported');
         } catch (error) {
             console.error('Error exporting to PDF:', error);
-            alert('Error exporting to PDF. Please try again.');
+            toast.error('Error exporting to PDF. Please try again.');
         } finally {
             setIsExporting(false);
         }
@@ -592,9 +602,10 @@ export default function SavedInsightsContent() {
             link.download = "insights.docx";
             link.click();
             URL.revokeObjectURL(url);
+            toast.success('DOCX exported');
         } catch (error) {
             console.error('Error exporting to DOCX:', error);
-            alert('Error exporting to DOCX. Please try again.');
+            toast.error('Error exporting to DOCX. Please try again.');
         } finally {
             setIsExporting(false);
         }
@@ -603,7 +614,7 @@ export default function SavedInsightsContent() {
     // Handle export selection
     const handleExport = (format: string) => {
         if (filteredInsights.length === 0) {
-            alert("No insights to export!")
+            toast.info("No insights to export")
             return
         }
 
@@ -653,7 +664,8 @@ export default function SavedInsightsContent() {
                 <button
                     onClick={() => !disabled && toggleDropdown(name)}
                     disabled={disabled}
-                    className={`flex items-center gap-2 px-4 py-2 bg-muted rounded-lg text-sm transition-colors border border-border h-[37px] text-sm font-normal ${disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-muted/80 cursor-pointer"
+                    aria-expanded={openDropdown === name}
+                    className={`focus-ring flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-muted px-4 py-2 text-sm font-normal transition-colors ${disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-muted/80 cursor-pointer"
                         }`}
                 >
                     {icon}
@@ -661,7 +673,7 @@ export default function SavedInsightsContent() {
                     <ChevronDown className="w-4 h-4" />
                 </button>
                 {openDropdown === name && !disabled && (
-                    <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[160px]">
+                    <div className="absolute top-full left-0 mt-1 max-h-64 min-w-[160px] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg z-50">
                         {options.map((option) => (
                             <button
                                 key={option}
@@ -681,26 +693,28 @@ export default function SavedInsightsContent() {
         )
     }
 
-    const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX || "";
+    const assetPrefix = ASSET_PREFIX;
 
     return (
-        <div className="flex-1 p-8 flex justify-center h-full overflow-hidden">
-            <div className="w-[920px] space-y-12">
+        <div className="flex h-full flex-1 justify-center overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
+            <div className="w-full max-w-[1100px] space-y-8">
                 <div className="h-full flex flex-col">
                     <div className="flex items-center gap-4 mb-2">
                         <h1 className="gradient-title">Saved Insights</h1>
                         <div className="h-px bg-[#2a2a2a] flex-1 mt-1" />
                     </div>
-                    {filteredInsights.length === 0 ? (
-                        <div className="flex items-center justify-center h-64">
-                            <p className="text-muted-foreground text-center">No insights found for the selected filters.</p>
-                        </div>
+                    {insightsStatus === "loading" && safeInsightsList.length === 0 ? (
+                        <div role="status" aria-label="Loading saved insights" className="space-y-4 pt-4"><Skeleton className="h-10 w-full" />{[1, 2, 3].map((item) => <div key={item} className="rover-surface space-y-4 p-6"><Skeleton className="h-3 w-2/5" /><Skeleton className="h-5 w-3/4" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-5/6" /></div>)}<span className="sr-only">Loading…</span></div>
+                    ) : insightsStatus === "error" && safeInsightsList.length === 0 ? (
+                        <PageState kind="error" title="Saved insights couldn’t be loaded" description={insightsError || undefined} onRetry={() => selectedProject[0]?.ProjectID && void GetInsights(selectedProject[0].ProjectID, true)} className="mt-4" />
+                    ) : safeInsightsList.length === 0 ? (
+                        <PageState title="No saved insights yet" description="Save an Ask Rover response and it will appear here." className="mt-4" />
                     ) :
                         (
                             <>
 
                                 {/* Filter Toolbar */}
-                                <div className="flex items-center text-white gap-3 mb-4">
+                                <div className="flex max-w-full flex-wrap items-center gap-2 pb-2 text-white sm:gap-3">
                                     <Dropdown
                                         label="Source"
                                         name="source"
@@ -803,14 +817,14 @@ export default function SavedInsightsContent() {
 
                                 {/* Insights Cards */}
                                 {console.log("Rendering Insights:", filteredInsights)}
-                                <div className="flex-1 overflow-y-auto space-y-4 pb-6 scrollbar-hide">
+                                {filteredInsights.length === 0 ? <PageState title="No matching insights" description="Try clearing or changing the active filters." /> : <div className="flex-1 overflow-y-auto space-y-4 pb-6 scrollbar-hide">
                                     {(
                                         filteredInsights.map((insight) => (
                                             <div key={insight.QID}
                                                 className="bg-card border border-border rounded-lg py-4 hover:shadow-lg transition-shadow">
                                                 {/* Card Header */}
                                                 <div className="border-b border-border pb-2 mb-4 px-6">
-                                                    <div className="flex items-center gap-3 text-xs font-normal text-foreground">
+                                                        <div className="flex flex-wrap items-center gap-2 text-xs font-normal text-foreground sm:gap-3">
                                                         {/* <input type="checkbox" className="w-4 h-4 rounded border-border" /> */}
 
                                                         <span className="flex items-center gap-1">
@@ -849,6 +863,7 @@ export default function SavedInsightsContent() {
                                                             description="This action can't be undone."
                                                             trigger={
                                                                 <button
+                                                                    aria-label={`Archive insight: ${insight.Question}`}
                                                                     className="w-[31.29px] h-[31.29px] flex items-center justify-center rounded-full bg-[#201F1F] hover:bg-secondary text-icon-secondary hover:text-destructive cursor-pointer"
                                                                 >
                                                                     <Image
@@ -903,7 +918,7 @@ export default function SavedInsightsContent() {
                                             </div>
                                         ))
                                     )}
-                                </div>
+                                </div>}
                             </>
                         )}
                 </div>

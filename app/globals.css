@@ -47,6 +47,12 @@
   --lighttext: #DEDEDE;
   --icon-background: #D9D9D9B2;
   --primary-text: #FFFFFF;
+  --surface: rgba(19, 19, 21, 0.88);
+  --surface-raised: rgba(27, 27, 31, 0.96);
+  --surface-border: rgba(255, 255, 255, 0.09);
+  --focus-color: #9f8cff;
+  --skeleton-from: #19191e;
+  --skeleton-via: #282833;
   /* color-scheme: dark; */
 }
 
@@ -90,6 +96,12 @@
   --lighttext: #DEDEDE;
   --icon-background: #D9D9D9B2;
   --primary-text: #FFFFFF;
+  --surface: rgba(15, 15, 19, 0.88);
+  --surface-raised: rgba(24, 24, 29, 0.96);
+  --surface-border: rgba(255, 255, 255, 0.09);
+  --focus-color: #9f8cff;
+  --skeleton-from: #19191e;
+  --skeleton-via: #292934;
 }
 
 @theme inline {
@@ -149,16 +161,18 @@
 
   html,
   body {
-    background-color: #12121200; /* dark fallback */
+    background-color: #080808;
     min-height: 100%;
   }
 
   body {
     /* @apply bg-background text-foreground; */
-    background-image: var(--bg-image-url) !important;
-    background-size: cover !important;
-    background-position: center !important;
-    background-repeat: no-repeat !important;
+    background-image: var(--bg-image-url);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    color: var(--foreground);
+    overflow: hidden;
   }
 
   body::before {
@@ -167,13 +181,45 @@
     inset: 0;
     z-index: -1;
     background-image: var(--bg-image-url);
-    background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+    background-size: cover;
   }
+
 }
 
 @layer utilities {
+
+  .page-container {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  .rover-surface {
+    border: 1px solid var(--surface-border);
+    border-radius: 0.75rem;
+    background: var(--surface);
+    box-shadow: 0 16px 45px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(14px);
+  }
+
+  .rover-skeleton {
+    background: linear-gradient(90deg, var(--skeleton-from) 20%, var(--skeleton-via) 50%, var(--skeleton-from) 80%);
+    background-size: 220% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  .animate-shimmer { animation: shimmer 1.8s ease-in-out infinite; }
+
+  .focus-ring {
+    outline: none;
+  }
+
+  .focus-ring:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color) 45%, transparent);
+  }
 
   /* Added scrollbar-hide utility for hidden but scrollable elements */
   .scrollbar-hide {
@@ -214,6 +260,34 @@
   @apply bg-gradient-to-r from-[#323392] to-[#682E9C]
          hover:from-[#682E9C] hover:to-[#323392]
          text-white;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (min-width: 640px) {
+  .page-container { padding-inline: 1.5rem; }
+}
+
+@media (min-width: 1024px) {
+  .page-container { padding-inline: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+  .rover-skeleton { background-position: 0 0; }
+}
+
+@media (max-width: 639px) {
+  [data-sonner-toaster] { left: 1rem !important; right: 1rem !important; width: auto !important; }
 }
 
   @layer utilities {
