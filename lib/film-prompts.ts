@@ -62,12 +62,12 @@ const PROMPT_DEFINITIONS: Record<FilmAnalysisSection, PromptDefinition[]> = {
   "commercialViability":{"score":0,"confidence":"High|Medium|Low","verdict":"Strong|Promising|Uncertain|Weak","rationale":""},
   "distributionPotentials":{"theatrical":0,"ott":0,"panIndia":0}
 }`),
-    task("commercial", "commercial-revenue", "INR-crore revenue range and seasonal release window.", `{
+    task("commercial", "commercial-revenue", "Revenue and release window. Every money number is in crore: 12.5 means ₹12.5 Cr; never return raw rupees or formatted strings.", `{
   "grossPredictedRevenue":{"currency":"INR","unit":"crore","low":0,"likely":0,"high":0,"confidence":"High|Medium|Low","assumptions":[""]},
   "optimalReleaseWindow":{"window":"","season":"","rationale":"","avoid":[""]}
 }`),
-    task("commercial", "commercial-geography", "Top collection markets only; totals should broadly reconcile with gross revenue.", `{
-  "collectionForecast":{"regions":[{"region":"","low":0,"likely":0,"high":0,"states":[{"state":"","low":0,"likely":0,"high":0,"keyDistricts":[{"district":"","low":0,"likely":0,"high":0}]}]}],"otherMarkets":{"low":0,"likely":0,"high":0}}
+    task("commercial", "commercial-geography", "Top collection markets only. Every money number is in crore: 2.5 means ₹2.5 Cr. Region totals plus otherMarkets must approximate known gross revenue.", `{
+  "collectionForecast":{"currency":"INR","unit":"crore","regions":[{"region":"","low":0,"likely":0,"high":0,"states":[{"state":"","low":0,"likely":0,"high":0,"keyDistricts":[{"district":"","low":0,"likely":0,"high":0}]}]}],"otherMarkets":{"low":0,"likely":0,"high":0}}
 }`),
     task("commercial", "commercial-audience", "Audience profile, up to four comparables, hooks and viral moments.", `{
   "comparables":[{"name":"","narrativeSimilarity":0,"audienceMatch":0,"costMatch":0,"marketFit":0,"context":""}],
@@ -83,10 +83,10 @@ const PROMPT_DEFINITIONS: Record<FilmAnalysisSection, PromptDefinition[]> = {
   "locationsList":[{"name":"","scenes":0,"shootDays":0,"complexity":"Low|Medium|High","type":""}],
   "castPlanning":[{"character":"","starDependency":"","performance":"","shootDays":0}]
 }`),
-    task("production", "production-budget", "INR-crore budget, feasibility, bottlenecks and savings.", `{
+    task("production", "production-budget", "Budget, feasibility, bottlenecks and savings. Every money number is in crore: 8.5 means ₹8.5 Cr; never return raw rupees.", `{
   "productionFeasibility":{"score":0,"confidence":"High|Medium|Low","summary":"","bottlenecks":[""],"savings":[""]},
   "budgetBreakdown":[{"category":"","min":0,"max":0,"confidence":"High|Medium|Low"}],
-  "budgetInfo":{"min":0,"max":0,"currency":"INR","confidence":"High|Medium|Low","costDrivers":[{"name":"","severity":"High|Medium|Low","explanation":""}]}
+  "budgetInfo":{"min":0,"max":0,"currency":"INR","unit":"crore","confidence":"High|Medium|Low","costDrivers":[{"name":"","severity":"High|Medium|Low","explanation":""}]}
 }`),
   ],
   development: [

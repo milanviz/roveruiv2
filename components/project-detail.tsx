@@ -21,6 +21,8 @@ export default function ProjectDetail() {
   const selectedProject = useProjectStore((state) => state.selectedProject[0] as ProjectType | undefined)
   const setSelectedProject = useProjectStore((state) => state.setSelectedProject)
   const [projectTitle, setProjectTitle] = useState(selectedProject?.ProjectName || "")
+  const [filmMetadata, setFilmMetadata] = useState<Record<string, unknown> | null>(null)
+  const [filmMetadataReady, setFilmMetadataReady] = useState(!scriptId)
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [projectSearch, setProjectSearch] = useState("")
   const [filmTab, setFilmTab] = useState("Overview")
@@ -40,20 +42,34 @@ export default function ProjectDetail() {
   useEffect(() => setFilmTab("Overview"), [selectedProject?.ProjectID])
 
   useEffect(() => {
-    if (!scriptId) return
+    if (!scriptId) {
+      setFilmMetadata(null)
+      setFilmMetadataReady(true)
+      return
+    }
     let cancelled = false
+    setFilmMetadata(null)
+    setFilmMetadataReady(false)
     fetch(`/api/film-projects/${encodeURIComponent(scriptId)}/`)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
       .then((data) => {
         if (cancelled || !data.project) return
         const row = data.project
-        const title = selectedProject?.ProjectName || row.title || data.metadata?.title || data.metadata?.screenplay_title || row.file_name || "Film Project"
+        const apiMetadata = typeof data.metadata === "string"
+          ? (() => { try { return JSON.parse(data.metadata) } catch { return {} } })()
+          : data.metadata || {}
+        const populatedRow = Object.fromEntries(
+          Object.entries(row).filter(([, value]) => value != null && value !== ""),
+        )
+        setFilmMetadata({ ...apiMetadata, ...populatedRow })
+        const title = selectedProject?.ProjectName || row.title || apiMetadata.title || apiMetadata.screenplay_title || row.file_name || "Film Project"
         setProjectTitle(title)
         if (!selectedProject || selectedProject.ProjectID !== row.project_id) {
           setSelectedProject([{ ProjectID: row.project_id || `script-${scriptId}`, ProjectName: title, Summary: row.genre ? `${row.genre} screenplay analysis` : "Film Intelligence project", AIAgent: "Film Intelligence Specialist", CreatedBy: selectedProject?.CreatedBy || "", CreatedOn: row.created_at || new Date().toISOString().slice(0, 10), rowid: row.project_id || scriptId } as ProjectType])
         }
       })
       .catch((error) => console.error("Failed to hydrate film project", error))
+      .finally(() => { if (!cancelled) setFilmMetadataReady(true) })
     return () => { cancelled = true }
   }, [scriptId])
 
@@ -168,6 +184,8 @@ export default function ProjectDetail() {
     userEmail={selectedProject?.user_email || selectedProject?.CreatedBy}
     fileName={selectedProject?.file_name}
     fileUrl={selectedProject?.file_full_url}
+    initialMetadata={filmMetadata}
+    metadataReady={filmMetadataReady}
     generateIfMissing={generateIfMissing}
     onAskRover={(question) => { setFilmTab("Ask Rover"); window.setTimeout(() => send(question), 0) }}
     activeTab={filmTab}

@@ -35,6 +35,8 @@ interface FilmWorkspaceProps {
   userEmail?: string | null
   fileName?: string | null
   fileUrl?: string | null
+  initialMetadata?: Record<string, unknown> | null
+  metadataReady?: boolean
   generateIfMissing?: boolean
   onAskRover: (question: string) => void
   activeTab: string
@@ -112,6 +114,26 @@ const taskStatesFromSections = (
     .map((item) => [item.key, "ready" as const]),
 )
 
+const priorCardContext = (taskKey: string, payload?: Record<string, unknown>) => {
+  if (!payload) return null
+  const fields: Record<string, string[]> = {
+    "overview-scope": ["recommendation", "scores", "logline"],
+    "story-timeline": ["storyScorecard", "indianCinemaSignals"],
+    "commercial-revenue": ["commercialViability", "distributionPotentials"],
+    "commercial-geography": ["grossPredictedRevenue", "optimalReleaseWindow"],
+    "commercial-audience": ["commercialViability", "distributionPotentials"],
+    "production-logistics": ["productionSummary"],
+    "production-budget": ["productionSummary"],
+    "development-impact": ["developmentNotes", "rewriteNotes"],
+    "greenlight-matrix": ["recommendation", "whyItWorks"],
+    "greenlight-actions": ["recommendation", "decisionMatrix", "investmentOutlook"],
+  }
+  const entries = (fields[taskKey] || [])
+    .filter((field) => field in payload)
+    .map((field) => [field, payload[field]])
+  return entries.length > 0 ? Object.fromEntries(entries) : null
+}
+
 /** Animated shimmer bar used inside skeleton layouts. */
 function ShimmerBlock({ className = "" }: { className?: string }) {
   return (
@@ -153,12 +175,23 @@ function RefreshAnalysisBanner({ onRefresh }: { onRefresh: () => void }) {
   )
 }
 
-const numberOrZero = (value: unknown) => {
-  const number = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""))
-  return Number.isFinite(number) ? number : 0
+const financialValueInCrore = (value: unknown) => {
+  const text = String(value ?? "").trim().toLowerCase()
+  const number = typeof value === "number"
+    ? value
+    : Number.parseFloat(text.replaceAll(",", "").replace(/[^0-9.+-]/g, ""))
+  if (!Number.isFinite(number)) return 0
+
+  // Workflows occasionally return base INR despite a crore schema. Convert
+  // unmistakable rupee-scale values before the UI adds the crore label.
+  if (Math.abs(number) >= 100_000) return number / 10_000_000
+  if (/\b(?:lakh|lac)s?\b/.test(text)) return number / 100
+  if (/\bbillion\b/.test(text)) return number * 100
+  if (/\bmillion\b/.test(text)) return number / 10
+  return number
 }
 
-const crore = (value: unknown) => `₹${numberOrZero(value).toFixed(1)} Cr`
+const crore = (value: unknown) => `₹${financialValueInCrore(value).toFixed(1)} Cr`
 
 const compactPercentage = (value: unknown) => {
   const text = String(value ?? "")
@@ -336,6 +369,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
   userEmail,
   fileName,
   fileUrl,
+  initialMetadata,
+  metadataReady = true,
   generateIfMissing = false,
   onAskRover,
   activeTab,
@@ -351,6 +386,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
     pages: 0,
     runtimeMinutes: 0,
   })
+  const metadataRef = useRef(metadata)
   const [analysisReport, setAnalysisReport] = useState<any>({})
   const [loadingSections, setLoadingSections] = useState<Record<string, boolean>>({})
   const [sectionErrors, setSectionErrors] = useState<Record<string, string | null>>({})
@@ -378,17 +414,21 @@ const FilmWorkspace = memo(function FilmWorkspace({
   }, [fileUrl])
 
   const applyMetadata = (parsed: Record<string, any>) => {
-    setMetadata(prev => ({
-      ...prev,
-      title: parsed.title || parsed.screenplay_title || parsed.file_name || prev.title,
-      language: parsed.language || parsed.screenplay_language || prev.language,
-      genre: parsed.genre || prev.genre,
-      targetMarket: parsed.targetMarket || parsed.target_market || parsed.target_market_industry || prev.targetMarket,
-      releaseStrategy: parsed.releaseStrategy || parsed.release_strategy || prev.releaseStrategy,
-      expectedBudget: parsed.expectedBudget || parsed.expected_budget || prev.expectedBudget,
-      pages: parsed.pages || parsed.attributes?.pages || prev.pages,
-      runtimeMinutes: parsed.runtimeMinutes || parsed.attributes?.runtimeMinutes || prev.runtimeMinutes,
-    }))
+    setMetadata(prev => {
+      const next = {
+        ...prev,
+        title: parsed.title || parsed.screenplay_title || parsed.file_name || prev.title,
+        language: parsed.language || parsed.screenplay_language || prev.language,
+        genre: parsed.genre || prev.genre,
+        targetMarket: parsed.targetMarket || parsed.target_market || parsed.target_market_industry || prev.targetMarket,
+        releaseStrategy: parsed.releaseStrategy || parsed.release_strategy || prev.releaseStrategy,
+        expectedBudget: parsed.expectedBudget || parsed.expected_budget || prev.expectedBudget,
+        pages: parsed.pages || parsed.attributes?.pages || prev.pages,
+        runtimeMinutes: parsed.runtimeMinutes || parsed.attributes?.runtimeMinutes || prev.runtimeMinutes,
+      }
+      metadataRef.current = next
+      return next
+    })
   }
 
   const persistPartialProgress = () => {
@@ -406,7 +446,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
 
   useEffect(() => {
     if (projectName) {
-      setMetadata(prev => ({ ...prev, title: projectName }));
+      applyMetadata({ title: projectName })
     }
   }, [projectName]);
 
@@ -428,7 +468,11 @@ const FilmWorkspace = memo(function FilmWorkspace({
     inflightRef.current.set(nextTask.socketTag, Promise.resolve())
 
     try {
-      const response = await fetchSummarizeWorkflow(fileUrlRef.current!, nextTask.prompt, nextTask.socketTag)
+      const completedCardData = priorCardContext(nextTask.key, sectionPayloadsRef.current[section])
+      const prompt = completedCardData
+        ? `${nextTask.prompt}\nknown_card_data=${JSON.stringify(completedCardData)}`
+        : nextTask.prompt
+      const response = await fetchSummarizeWorkflow(fileUrlRef.current!, prompt, nextTask.socketTag)
       if (!inflightRef.current.has(nextTask.socketTag)) return
 
       const directPayload = coerceJsonObject(response)
@@ -579,12 +623,12 @@ const FilmWorkspace = memo(function FilmWorkspace({
 
     try {
       const allTasks = buildSectionPromptTasks(section, {
-          title: metadata.title,
-          language: metadata.language,
-          genre: metadata.genre,
-          target_market: metadata.targetMarket,
-          release_strategy: metadata.releaseStrategy,
-          expected_budget: metadata.expectedBudget,
+          title: metadataRef.current.title,
+          language: metadataRef.current.language,
+          genre: metadataRef.current.genre,
+          target_market: metadataRef.current.targetMarket,
+          release_strategy: metadataRef.current.releaseStrategy,
+          expected_budget: metadataRef.current.expectedBudget,
       });
       const tasksToRun = retryFailedOnly
         ? allTasks.filter((task) => taskStatesRef.current[task.key] === "error")
@@ -611,6 +655,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
 
   // Load a saved dashboard before fetching metadata or triggering generation.
   useEffect(() => {
+    if (!metadataReady) return
     let mounted = true;
     const resolvedEmail = userEmail || localStorage.getItem("rover_user_email") || ""
 
@@ -632,7 +677,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
     setAnalysisReport({})
     setSectionErrors({})
     setLoadingSections({})
-    setMetadata({
+    const resetMetadata = {
       title: projectName || "",
       language: "",
       genre: "",
@@ -641,11 +686,17 @@ const FilmWorkspace = memo(function FilmWorkspace({
       expectedBudget: "",
       pages: 0,
       runtimeMinutes: 0,
-    })
+    }
+    metadataRef.current = resetMetadata
+    setMetadata(resetMetadata)
     
     try {
-      const tempMetaRaw = localStorage.getItem("temp_film_metadata");
+      const projectMetaRaw = localStorage.getItem(`film_metadata_${projectId}`)
+      const tempMetaRaw = localStorage.getItem("temp_film_metadata")
+      const projectMeta = JSON.parse(projectMetaRaw || "null")
       const tempMeta = JSON.parse(tempMetaRaw || "null")
+      if (initialMetadata) applyMetadata(initialMetadata)
+      if (projectMeta) applyMetadata(projectMeta)
       if (tempMeta) {
         const parsed = tempMeta;
         if (parsed.scriptId === scriptId) {
@@ -771,7 +822,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
     hydrate()
 
     return () => { mounted = false; };
-  }, [scriptId, projectId, projectName, userEmail, fileUrl, generateIfMissing, hydrationAttempt])
+  }, [scriptId, projectId, projectName, userEmail, fileUrl, initialMetadata, metadataReady, generateIfMissing, hydrationAttempt])
 
   // Generate all seven dashboards automatically, one section and one task at a time.
   // A failed section is skipped so it cannot block the remaining dashboards.
