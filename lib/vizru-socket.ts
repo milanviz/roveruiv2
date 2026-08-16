@@ -40,6 +40,7 @@
 import io from "socket.io-client";
 
 import { APP_CONFIG } from "@/app/config/config";
+import { WORKFLOW_LINKS, workflowUrl } from "@/lib/workflow-links";
 import { getAuthFromStorage } from "@/lib/auth";
 
 type Handler = (payload: any) => void;
@@ -98,7 +99,7 @@ function socketUrl(): string {
  * actually use rather than assuming one.
  */
 async function fetchSocketToken(): Promise<string> {
-  const url = `${APP_CONFIG.PUBLIC_API_URL}${APP_CONFIG.SOCKET_TOKEN_WF}`;
+  const url = workflowUrl(WORKFLOW_LINKS.SOCKET_TOKEN);
 
   const response = await fetch(url, { method: "POST", body: new FormData() });
   if (!response.ok) {

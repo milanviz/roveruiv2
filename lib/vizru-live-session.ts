@@ -22,6 +22,7 @@
  */
 
 import { APP_CONFIG } from "@/app/config/config";
+import { WORKFLOW_LINKS } from "@/lib/workflow-links";
 import { getAuthFromStorage } from "@/lib/auth";
 
 const FRAME = {
@@ -162,13 +163,13 @@ export async function startVizruSession(
 
   const body = new URLSearchParams();
   body.set("op", "workflow.process");
-  body.set("args[workflow-code]", APP_CONFIG.LIVE_AGENT_WF);
+  body.set("args[workflow-code]", WORKFLOW_LINKS.LIVE_AGENT);
 
   for (const [key, value] of Object.entries(context)) {
     if (value !== undefined && value !== null && value !== "") body.set(key, String(value));
   }
 
-  log(`starting session via ${APP_CONFIG.LIVE_AGENT_WF}`);
+  log(`starting session via ${WORKFLOW_LINKS.LIVE_AGENT}`);
 
   const response = await fetch(`${APP_CONFIG.PUBLIC_API_URL}sys/api.v1`, {
     method: "POST",

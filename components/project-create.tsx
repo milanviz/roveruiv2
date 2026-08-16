@@ -11,6 +11,7 @@ import { ASSET_PREFIX } from "@/lib/env"
 import CustomButton from "./custom-button"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/async-state"
+import { WORKFLOW_LINKS, workflowUrl } from "@/lib/workflow-links"
 
 export default function ProjectCreate() {
   const router = useRouter()
@@ -93,7 +94,7 @@ export default function ProjectCreate() {
     setUploadedFileUrl(null);
 
     try {
-      const { FILM_UPLOAD_WORKFLOW_URL, extractFileProxyUrl } = await import('@/lib/film-workflows');
+      const { extractFileProxyUrl } = await import('@/lib/film-workflows');
       const formData = new FormData();
       
       const generatedScriptId = `script-${Date.now()}`;
@@ -101,7 +102,7 @@ export default function ProjectCreate() {
       formData.append("file_name", file.name);
       formData.append("script_id", generatedScriptId);
       
-      const uploadRes = await fetch(FILM_UPLOAD_WORKFLOW_URL, {
+      const uploadRes = await fetch(workflowUrl(WORKFLOW_LINKS.FILM_UPLOAD), {
         method: "POST",
         body: formData,
       });

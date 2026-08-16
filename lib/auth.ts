@@ -1,4 +1,5 @@
 import { APP_CONFIG } from "@/app/config/config";
+import { WORKFLOW_LINKS, workflowUrl } from "@/lib/workflow-links";
 
 
 export interface AuthData {
@@ -24,7 +25,7 @@ let authRequest: Promise<AuthData> | null = null;
 export const fetchJWTToken = async (): Promise<AuthData> => {
     try {
         const response = await fetch(
-            `${APP_CONFIG.PUBLIC_API_URL}${APP_CONFIG.WORKFLOW_EXEC}roverv2getjwttoken692829d6ac4aa`,
+            workflowUrl(WORKFLOW_LINKS.JWT_TOKEN),
             {
                 method: "POST",
                 body: new FormData(),

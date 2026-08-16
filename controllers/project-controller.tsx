@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "@/app/config/config";
+import { WORKFLOW_LINKS, workflowUrl, type WorkflowLink } from "@/lib/workflow-links";
 import { useProjectStore } from "@/app/store/project/project.store";
 import type { ProjectType } from "@/types/project-types";
 import {
@@ -50,10 +50,10 @@ const workflowRows = (payload: unknown): DatabaseRow[] => {
     return [];
 };
 
-const postFields = async (workflow: string, fields: Record<string, string | Blob>) => {
+const postFields = async (workflow: WorkflowLink, fields: Record<string, string | Blob>) => {
     const formData = new FormData();
     Object.entries(fields).forEach(([name, value]) => formData.append(name, value));
-    const response = await fetch(APP_CONFIG.PUBLIC_API_URL + workflow, {
+    const response = await fetch(workflowUrl(workflow), {
         method: "POST",
         body: formData,
     });
@@ -77,7 +77,7 @@ const projectsCacheKey = (email: string) => `projects:${email.toLowerCase()}`;
 
 const getUserDetails = (email: string) =>
     cachedWorkflowRequest(userCacheKey(email), WORKFLOW_CACHE_TTL.USER, async () => {
-        const payload = await postFields(APP_CONFIG.USER_DETAILS_WF, { user_email: email });
+        const payload = await postFields(WORKFLOW_LINKS.USER_DETAILS, { user_email: email });
         const rows = workflowRows(payload);
         const user = rows.find((row) => String(row.user_email ?? "").toLowerCase() === email.toLowerCase())
             ?? rows[0];
@@ -128,7 +128,7 @@ export const GetProjectsController = async (force = false) => {
             projectsCacheKey(email),
             WORKFLOW_CACHE_TTL.PROJECTS,
             async () => {
-                const projectsPayload = await postFields(APP_CONFIG.PROJECT_LIST_WF, { user_email: email });
+                const projectsPayload = await postFields(WORKFLOW_LINKS.PROJECT_LIST, { user_email: email });
                 return workflowRows(projectsPayload)
                     .filter((row) => row.project_id != null)
                     .map(toProject);
@@ -200,7 +200,7 @@ export const ProjectCreateController = async (
             file_name: databaseProject.file_name,
         };
         if (scriptFile) workflowEntry.file = scriptFile;
-        const createdPayload = await postFields(APP_CONFIG.CREATE_PROJECT_WF, workflowEntry);
+        const createdPayload = await postFields(WORKFLOW_LINKS.CREATE_PROJECT, workflowEntry);
         const returnedRow = workflowRows(createdPayload).find((row) => row.project_id != null);
         const projectData = [toProject(returnedRow ?? databaseProject)];
         // The specialist is UI metadata; database writes use only the supplied headers.
@@ -325,7 +325,7 @@ export const ShareProject = async (projectId: string, Mode: string, Member: stri
         // formData.append("rowid", rowid);
 
         const res = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.SHARE_PROJECT_WF,
+            workflowUrl(WORKFLOW_LINKS.SHARE_PROJECT),
             {
                 method: "POST",
                 body: formData,
@@ -362,7 +362,7 @@ export const ArchiveProjects = async (
     // formData.append("rowid", rowid);
 
     const res = await fetch(
-        APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.ARCHIVE_PROJECT_WF,
+        workflowUrl(WORKFLOW_LINKS.ARCHIVE_PROJECT),
         {
             method: "POST",
             body: formData,

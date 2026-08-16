@@ -21,7 +21,8 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "sonner"
 import type { FilmAnalysisSection } from "@/lib/film-workflows"
-import { FILM_ANALYSIS_SECTIONS } from "@/lib/film-workflows"
+import { FILM_ANALYSIS_SECTIONS, fetchSummarizeWorkflow } from "@/lib/film-workflows"
+import { buildSectionPromptTasks, FILM_ANALYSIS_TASKS, tasksForSection, type FilmAnalysisTask } from "@/lib/film-prompts"
 import { useVizruRealtime } from "@/lib/use-vizru-realtime"
 
 interface FilmWorkspaceProps {
@@ -65,6 +66,43 @@ const SECTION_LABELS: Record<string, string> = {
   greenlight: "Greenlight Decision",
 }
 
+const CURRENT_SECTION_FIELDS: Partial<Record<FilmAnalysisSection, string[]>> = {
+  commercial: ["commercialViability", "grossPredictedRevenue", "optimalReleaseWindow", "collectionForecast"],
+  production: ["productionFeasibility"],
+  development: ["developmentImpact"],
+  greenlight: ["decisionMatrix", "investmentOutlook"],
+}
+
+const sectionNeedsRefresh = (section: FilmAnalysisSection, payload?: Record<string, unknown>) =>
+  !!payload && (CURRENT_SECTION_FIELDS[section] || []).some((field) => !(field in payload))
+
+const taskHasData = (taskKey: string, payload?: Record<string, unknown>) => {
+  if (!payload) return false
+  const fields: Record<string, string[]> = {
+    overview: ["recommendation"],
+    story: ["storyScorecard"],
+    characters: ["charactersList"],
+    "commercial-core": ["commercialViability"],
+    "commercial-forecast": ["grossPredictedRevenue", "collectionForecast"],
+    "commercial-audience": ["comparables", "marketingHooks"],
+    "production-logistics": ["productionSummary", "locationsList"],
+    "production-budget": ["productionFeasibility", "budgetBreakdown"],
+    "development-notes": ["developmentNotes", "rewriteNotes"],
+    "development-impact": ["developmentImpact", "draftComparison"],
+    "greenlight-decision": ["recommendation", "whyItWorks"],
+    "greenlight-actions": ["decisionMatrix", "investmentOutlook"],
+  }
+  return (fields[taskKey] || []).some((field) => field in payload)
+}
+
+const taskStatesFromSections = (
+  sections: Partial<Record<FilmAnalysisSection, Record<string, unknown>>>,
+) => Object.fromEntries(
+  FILM_ANALYSIS_TASKS
+    .filter((item) => taskHasData(item.key, sections[item.section]))
+    .map((item) => [item.socketTag, "ready" as const]),
+)
+
 /** Animated shimmer bar used inside skeleton layouts. */
 function ShimmerBlock({ className = "" }: { className?: string }) {
   return (
@@ -74,6 +112,44 @@ function ShimmerBlock({ className = "" }: { className?: string }) {
     />
   )
 }
+
+function AnalysisGroupSkeleton({ cards = 3 }: { cards?: number }) {
+  return (
+    <div className={`grid gap-6 ${cards === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+      {Array.from({ length: cards }).map((_, index) => (
+        <div key={index} className="rounded-xl border border-border bg-[#131315] p-6 space-y-4">
+          <ShimmerBlock className="h-3 w-28" />
+          <ShimmerBlock className="h-9 w-32" />
+          <ShimmerBlock className="h-3 w-full opacity-60" />
+          <ShimmerBlock className="h-3 w-4/5 opacity-40" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RefreshAnalysisBanner({ onRefresh }: { onRefresh: () => void }) {
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-[#75A5ED]/25 bg-[#75A5ED]/8 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-semibold text-slate-100">New analysis metrics are available</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          Refresh this dashboard to add the latest forecast and decision cards. Existing insights remain visible while it runs.
+        </p>
+      </div>
+      <button onClick={onRefresh} className="focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#75A5ED]/30 bg-[#75A5ED]/15 px-4 text-xs font-semibold text-[#9bc1f7] hover:bg-[#75A5ED]/25">
+        <RefreshCw className="size-3.5" /> Refresh metrics
+      </button>
+    </div>
+  )
+}
+
+const numberOrZero = (value: unknown) => {
+  const number = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""))
+  return Number.isFinite(number) ? number : 0
+}
+
+const crore = (value: unknown) => `₹${numberOrZero(value).toFixed(1)} Cr`
 
 function SectionSkeleton({ sectionName }: { sectionName?: string }) {
   const label = sectionName ? SECTION_LABELS[sectionName] || sectionName : "this section"
@@ -166,6 +242,7 @@ function SectionStatus({
   error,
   onRetry,
   ready,
+  hasData,
   children,
   sectionName,
 }: {
@@ -173,10 +250,11 @@ function SectionStatus({
   error: string | null
   onRetry: () => void
   ready: boolean
+  hasData: boolean
   children: ReactNode
   sectionName?: string
 }) {
-  if (error && !ready) {
+  if (error && !ready && !hasData && !loading) {
     const label = sectionName ? SECTION_LABELS[sectionName] || sectionName : "this section"
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-20">
@@ -199,7 +277,7 @@ function SectionStatus({
     )
   }
 
-  if (!ready) {
+  if (!ready && !hasData) {
     return (
       <div className="relative">
         <SectionSkeleton sectionName={sectionName} />
@@ -208,14 +286,26 @@ function SectionStatus({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-h-6">
+          {loading && (
+            <span className="inline-flex items-center gap-2 text-xs text-[#8cb6f4]">
+              <Loader2 className="size-3.5 animate-spin" /> Updating analysis groups…
+            </span>
+          )}
+          {error && (
+            <span className="inline-flex items-center gap-2 text-xs text-amber-400">
+              <AlertTriangle className="size-3.5" /> {error}
+            </span>
+          )}
+        </div>
         <button
           onClick={onRetry}
           title="Force retry analysis for this section"
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[#1a1a1f] border border-border text-muted-foreground hover:text-foreground hover:bg-[#252530] transition-all cursor-pointer shadow-sm"
         >
-          <RefreshCw className="w-3.5 h-3.5" /> Re-analyze Section
+          <RefreshCw className="w-3.5 h-3.5" /> {error ? "Retry Missing Analysis" : "Re-analyze Section"}
         </button>
       </div>
       {children}
@@ -250,15 +340,19 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const [loadingSections, setLoadingSections] = useState<Record<string, boolean>>({})
   const [sectionErrors, setSectionErrors] = useState<Record<string, string | null>>({})
   const [readySections, setReadySections] = useState<Record<string, boolean>>({})
+  const [taskStates, setTaskStates] = useState<Record<string, "queued" | "loading" | "ready" | "error">>({})
   const [hydrated, setHydrated] = useState(false)
   const [generationEnabled, setGenerationEnabled] = useState(false)
   const [hydrationAttempt, setHydrationAttempt] = useState(0)
   
   const inflightRef = useRef<Map<string, Promise<void>>>(new Map())
+  const taskQueuesRef = useRef<Map<FilmAnalysisSection, Array<FilmAnalysisTask & { prompt: string }>>>(new Map())
   const sectionPayloadsRef = useRef<Partial<Record<FilmAnalysisSection, Record<string, unknown>>>>({})
   const dashboardSavedRef = useRef(false)
   const readySectionsRef = useRef(readySections)
   readySectionsRef.current = readySections
+  const taskStatesRef = useRef(taskStates)
+  taskStatesRef.current = taskStates
   const fileUrlRef = useRef<string | null>(fileUrl || null)
 
   useEffect(() => {
@@ -298,8 +392,47 @@ const FilmWorkspace = memo(function FilmWorkspace({
     }
   }, [projectName]);
 
-  /** Apply a socket or REST payload to the right section. */
-  const applySectionPayload = (section: FilmAnalysisSection, payload: any) => {
+  const triggerNextTask = async (section: FilmAnalysisSection): Promise<void> => {
+    if (tasksForSection(section).some((task) => inflightRef.current.has(task.socketTag))) return
+    const queue = taskQueuesRef.current.get(section) || []
+    const nextTask = queue[0]
+    if (!nextTask) {
+      taskQueuesRef.current.delete(section)
+      return
+    }
+
+    taskQueuesRef.current.set(section, queue.slice(1))
+    const nextTaskStates = { ...taskStatesRef.current, [nextTask.socketTag]: "loading" as const }
+    taskStatesRef.current = nextTaskStates
+    setTaskStates(nextTaskStates)
+    setLoadingSections(prev => ({ ...prev, [section]: true }))
+    inflightRef.current.set(nextTask.socketTag, Promise.resolve())
+
+    try {
+      await fetchSummarizeWorkflow(fileUrlRef.current!, nextTask.prompt, nextTask.socketTag)
+    } catch (error: any) {
+      console.error(`Failed to trigger ${nextTask.key}:`, error)
+      failTask(nextTask, error?.message || `Failed to start ${nextTask.key.replaceAll("-", " ")}.`)
+    }
+  }
+
+  const failTask = (task: FilmAnalysisTask, message: string) => {
+    const nextTaskStates = { ...taskStatesRef.current, [task.socketTag]: "error" as const }
+    taskStatesRef.current = nextTaskStates
+    setTaskStates(nextTaskStates)
+    inflightRef.current.delete(task.socketTag)
+    setLoadingSections(prev => ({
+      ...prev,
+      [task.section]: tasksForSection(task.section).some((item) =>
+        nextTaskStates[item.socketTag] === "loading" || nextTaskStates[item.socketTag] === "queued"
+      ),
+    }))
+    setSectionErrors(prev => ({ ...prev, [task.section]: message }))
+    void triggerNextTask(task.section)
+  }
+
+  /** Merge one task's socket payload into its parent dashboard section. */
+  const applyTaskPayload = (task: FilmAnalysisTask, payload: any) => {
     const outputStr: unknown = payload?.output ?? payload
     let parsed: Record<string, any> | null = null
 
@@ -309,11 +442,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
       parsed = outputStr as Record<string, any>
     }
 
-    // Empty output from the server (e.g. story returned "") — mark as error
     if (!parsed) {
-      setSectionErrors(prev => ({ ...prev, [section]: "No data returned for this section." }))
-      setLoadingSections(prev => ({ ...prev, [section]: false }))
-      inflightRef.current.delete(section)
+      failTask(task, `No data returned for ${task.key.replaceAll("-", " ")}.`)
       return
     }
 
@@ -322,26 +452,41 @@ const FilmWorkspace = memo(function FilmWorkspace({
       try { localStorage.setItem("temp_film_analysis", JSON.stringify(next)) } catch { }
       return next
     })
-    sectionPayloadsRef.current[section] = parsed
+    sectionPayloadsRef.current[task.section] = {
+      ...(sectionPayloadsRef.current[task.section] || {}),
+      ...parsed,
+    }
     persistPartialProgress()
     applyMetadata(parsed)
-    setReadySections(prev => {
-      const next = { ...prev, [section]: true }
-      readySectionsRef.current = next
-      return next
-    })
-    setLoadingSections(prev => ({ ...prev, [section]: false }))
-    inflightRef.current.delete(section)
+
+    const nextTaskStates = { ...taskStatesRef.current, [task.socketTag]: "ready" as const }
+    taskStatesRef.current = nextTaskStates
+    setTaskStates(nextTaskStates)
+    inflightRef.current.delete(task.socketTag)
+
+    const sectionTasks = tasksForSection(task.section)
+    const complete = sectionTasks.every((item) => nextTaskStates[item.socketTag] === "ready")
+    const stillLoading = sectionTasks.some((item) =>
+      nextTaskStates[item.socketTag] === "loading" || nextTaskStates[item.socketTag] === "queued"
+    )
+    setLoadingSections(prev => ({ ...prev, [task.section]: stillLoading }))
+    if (complete) {
+      setReadySections(prev => {
+        const next = { ...prev, [task.section]: true }
+        readySectionsRef.current = next
+        return next
+      })
+      setSectionErrors(prev => ({ ...prev, [task.section]: null }))
+    }
+    void triggerNextTask(task.section)
   }
 
-  // Subscribe to every section tag via the realtime socket.
-  // The backend pings back with the tag equal to the section name once the LLM finishes.
-  FILM_ANALYSIS_SECTIONS.forEach(section => {
-    // Rules of hooks: this is a stable array, so the hook count never changes.
+  // Every prompt task has a stable realtime tag, so responses can arrive out of order.
+  FILM_ANALYSIS_TASKS.forEach(task => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    useVizruRealtime(section, (payload: any) => {
-      console.log(`[FilmWorkspace] socket → ${section}`, payload)
-      applySectionPayload(section, payload)
+    useVizruRealtime(task.socketTag, (payload: any) => {
+      console.log(`[FilmWorkspace] socket → ${task.socketTag}`, payload)
+      applyTaskPayload(task, payload)
     })
   })
 
@@ -363,14 +508,14 @@ const FilmWorkspace = memo(function FilmWorkspace({
     }
     
     if (!force && readySectionsRef.current[section]) return;
-    if (inflightRef.current.has(section)) return;
+    const sectionTasks = tasksForSection(section)
+    if (sectionTasks.some((task) => inflightRef.current.has(task.socketTag)) || taskQueuesRef.current.has(section)) return;
 
     setLoadingSections(prev => ({ ...prev, [section]: true }));
+    const retryFailedOnly = force && !!sectionErrors[section]
     setSectionErrors(prev => ({ ...prev, [section]: null }));
     if (force) {
       dashboardSavedRef.current = false
-      delete sectionPayloadsRef.current[section]
-      persistPartialProgress()
       setReadySections(prev => {
         const next = { ...prev, [section]: false };
         readySectionsRef.current = next;
@@ -378,13 +523,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
       });
     }
 
-    // Fire-and-forget: just trigger the workflow.
-    // The actual result arrives via the socket tag matching `section`.
-    inflightRef.current.set(section, Promise.resolve());
     try {
-      const { fetchSummarizeWorkflow, buildSectionPrompt } = await import('@/lib/film-workflows');
-      
-      const prompt = buildSectionPrompt(section, {
+      const allTasks = buildSectionPromptTasks(section, {
           title: metadata.title,
           language: metadata.language,
           genre: metadata.genre,
@@ -392,16 +532,26 @@ const FilmWorkspace = memo(function FilmWorkspace({
           release_strategy: metadata.releaseStrategy,
           expected_budget: metadata.expectedBudget,
       });
+      const tasksToRun = retryFailedOnly
+        ? allTasks.filter((task) => taskStatesRef.current[task.socketTag] === "error")
+        : allTasks
 
-      // Trigger only — response is delivered via socket
-      await fetchSummarizeWorkflow(fileUrlRef.current!, prompt, section);
+      const nextTaskStates = { ...taskStatesRef.current }
+      tasksToRun.forEach((task) => {
+        nextTaskStates[task.socketTag] = "queued"
+      })
+      taskStatesRef.current = nextTaskStates
+      setTaskStates(nextTaskStates)
+      taskQueuesRef.current.set(section, tasksToRun)
+
+      // Start one task only. Its socket result advances this section's queue.
+      await triggerNextTask(section)
     } catch (err: any) {
       console.error(`Failed to trigger analysis for ${section}:`, err);
       setSectionErrors(prev => ({ ...prev, [section]: err.message || "Failed to start analysis" }));
       setLoadingSections(prev => ({ ...prev, [section]: false }));
-      inflightRef.current.delete(section);
     }
-    // Loading stays true until the socket calls applySectionPayload
+    // Loading stays true until every sequential task's socket payload arrives.
   }
 
   // Load a saved dashboard before fetching metadata or triggering generation.
@@ -413,9 +563,12 @@ const FilmWorkspace = memo(function FilmWorkspace({
     setGenerationEnabled(false)
     setReadySections({})
     readySectionsRef.current = {}
+    setTaskStates({})
+    taskStatesRef.current = {}
     sectionPayloadsRef.current = {}
     dashboardSavedRef.current = false
     inflightRef.current.clear()
+    taskQueuesRef.current.clear()
     fileUrlRef.current = fileUrl || null
     setAnalysisReport({})
     setSectionErrors({})
@@ -455,6 +608,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
       const applySavedDashboard = (saved: Awaited<ReturnType<typeof workflows.fetchSavedFilmDashboard>>) => {
         if (!saved) return false
         sectionPayloadsRef.current = saved.sections
+        const savedTaskStates = taskStatesFromSections(saved.sections)
+        setTaskStates(savedTaskStates)
+        taskStatesRef.current = savedTaskStates
         dashboardSavedRef.current = true
         setGenerationEnabled(false)
         if (saved.file_full_url) fileUrlRef.current = saved.file_full_url
@@ -480,6 +636,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
         sectionPayloadsRef.current = Object.fromEntries(
           availableSections.map((section) => [section, progress.sections[section]]),
         )
+        const partialTaskStates = taskStatesFromSections(sectionPayloadsRef.current)
+        setTaskStates(partialTaskStates)
+        taskStatesRef.current = partialTaskStates
         if (progress.file_full_url) fileUrlRef.current = progress.file_full_url
         const merged = Object.assign({}, ...availableSections.map((section) => progress.sections[section]))
         setAnalysisReport(merged)
@@ -743,6 +902,20 @@ const FilmWorkspace = memo(function FilmWorkspace({
     theatrical: 0, ott: 0, panIndia: 0
   }
 
+  const commercialViability = analysisReport?.commercialViability || {
+    score: 0, confidence: "—", verdict: "Awaiting analysis", rationale: ""
+  }
+  const grossPredictedRevenue = analysisReport?.grossPredictedRevenue || {
+    low: 0, likely: 0, high: 0, confidence: "—", assumptions: []
+  }
+  const optimalReleaseWindow = analysisReport?.optimalReleaseWindow || {
+    window: "Not specified", season: "", rationale: "", avoid: []
+  }
+  const collectionForecast = analysisReport?.collectionForecast || { regions: [], otherMarkets: null }
+  const audienceMetrics = analysisReport?.audienceMetrics || {
+    primaryAudience: "Not specified", primaryMarket: "Not specified", secondaryMarket: "Not specified", metrics: []
+  }
+
   const marketingHooks: any[] = analysisReport?.marketingHooks || []
 
   const viralMoments: any[] = analysisReport?.viralMoments || []
@@ -762,6 +935,10 @@ const FilmWorkspace = memo(function FilmWorkspace({
     max: typeof b.max === "number" ? b.max : parseFloat(String(b.max).replace(/[^0-9.]/g, "")) || 0,
     confidence: b.confidence
   }))
+  const productionFeasibility = analysisReport?.productionFeasibility || {
+    score: 0, confidence: "—", summary: "", bottlenecks: [], savings: []
+  }
+  const budgetInfo = analysisReport?.budgetInfo || { min: 0, max: 0, confidence: "—", costDrivers: [] }
 
   const developmentNotes: any[] = (analysisReport?.developmentNotes || analysisReport?.rewriteNotes || []).map((n: any) => ({
     priority: n.priority,
@@ -773,6 +950,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
   }))
 
   const draftComparison: any[] = analysisReport?.draftComparison || []
+  const developmentImpact = analysisReport?.developmentImpact || {
+    readinessScore: 0, topPriority: "Not specified", expectedCommercialLift: "—", expectedCostImpact: "—", summary: ""
+  }
 
   const whyItWorks: string[] = analysisReport?.whyItWorks || []
 
@@ -787,12 +967,28 @@ const FilmWorkspace = memo(function FilmWorkspace({
     owner: s.owner || "",
     timing: s.timing || "",
   }))
+  const decisionMatrix = analysisReport?.decisionMatrix || { creative: 0, commercial: 0, production: 0, readiness: 0 }
+  const investmentOutlook = analysisReport?.investmentOutlook || {
+    riskLevel: "—", returnPotential: "—", capitalFit: "Not specified", conditions: []
+  }
+
+  const taskReady = (key: string) => {
+    const task = FILM_ANALYSIS_TASKS.find((item) => item.key === key)
+    if (!task) return false
+    return taskStates[task.socketTag] === "ready" || taskHasData(key, sectionPayloadsRef.current[task.section])
+  }
+  const taskLoading = (key: string) => {
+    const task = FILM_ANALYSIS_TASKS.find((item) => item.key === key)
+    return !!task && (taskStates[task.socketTag] === "loading" || taskStates[task.socketTag] === "queued")
+  }
+  const needsRefresh = (section: FilmAnalysisSection) =>
+    !loadingSections[section] && sectionNeedsRefresh(section, sectionPayloadsRef.current[section])
 
   const logline = analysisReport?.logline || ""
   const synopsis = analysisReport?.synopsis || ""
 
   const retryActiveSection = () => {
-    if (!generationEnabled && !sectionReady) {
+    if (!generationEnabled && !sectionReady && !(activeSection && sectionPayloadsRef.current[activeSection])) {
       setHydrationAttempt((attempt) => attempt + 1)
       return
     }
@@ -809,7 +1005,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
           {["Overview", "Story", "Characters", "Commercial", "Production", "Development", "Greenlight"].map(tab => {
             const sec = TAB_TO_SECTION[tab]
             const busy = !!(loadingSections[sec] && !readySections[sec])
-            const unavailable = !readySections[sec]
+            const unavailable = !readySections[sec] && !loadingSections[sec] && !sectionPayloadsRef.current[sec]
             return (
               <button
                 key={tab}
@@ -885,7 +1081,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
 
       {/* Main Tab Panels */}
       {activeTab !== "Ask Rover" && <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-custom px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-        <div className="max-w-[1100px] mx-auto space-y-8 pb-20">
+        <div className="mx-auto max-w-[1200px] space-y-10 pb-24">
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === "Overview" && (
@@ -894,6 +1090,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              hasData={!!(activeSection && sectionPayloadsRef.current[activeSection])}
               sectionName="overview"
             >
             <div className="space-y-6">
@@ -1118,6 +1315,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              hasData={!!(activeSection && sectionPayloadsRef.current[activeSection])}
               sectionName="story"
             >
             <div className="space-y-6">
@@ -1289,6 +1487,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              hasData={!!(activeSection && sectionPayloadsRef.current[activeSection])}
               sectionName="characters"
             >
             <div className="space-y-6">
@@ -1403,121 +1602,156 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              hasData={!!(activeSection && sectionPayloadsRef.current[activeSection])}
               sectionName="commercial"
             >
-            <div className="space-y-6">
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-                {/* Theatrical Potential */}
-                <Card className="bg-[#131315] border-border p-6 flex flex-col gap-3 min-h-[140px] h-auto overflow-visible">
-                  <div>
-                    <h4 className="text-xs text-muted-foreground uppercase font-bold mb-1">Theatrical Potential</h4>
-                    <span className="text-4xl font-bold text-emerald-400">{distributionPotentials.theatrical}%</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed break-words">
-                    Theatrical outlook for {metadata.targetMarket || "the primary market"} based on this screenplay.
-                  </p>
-                </Card>
-                {/* OTT Potential */}
-                <Card className="bg-[#131315] border-border p-6 flex flex-col gap-3 min-h-[140px] h-auto overflow-visible">
-                  <div>
-                    <h4 className="text-xs text-muted-foreground uppercase font-bold mb-1">OTT Potential</h4>
-                    <span className="text-4xl font-bold text-blue-400">{distributionPotentials.ott}%</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed break-words">
-                    Streaming suitability for this genre and narrative tone.
-                  </p>
-                </Card>
-                {/* Pan-India Potential */}
-                <Card className="bg-[#131315] border-border p-6 flex flex-col gap-3 min-h-[140px] h-auto overflow-visible">
-                  <div>
-                    <h4 className="text-xs text-muted-foreground uppercase font-bold mb-1">Pan-India Reach</h4>
-                    <span className="text-4xl font-bold text-amber-400">{distributionPotentials.panIndia}%</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed break-words">
-                    Cross-market expansion potential beyond the primary territory.
-                  </p>
-                </Card>
-              </div>
+              <div className="space-y-8">
+                {needsRefresh("commercial") && <RefreshAnalysisBanner onRefresh={() => analyzeSection("commercial", true)} />}
 
-              {/* Comparables Table */}
-              <Card className="bg-[#131315] border-border">
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-200">Comparable Narrative & Market Analyses</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Historical box office performers with similar parameters. No plagiarism matching; values correspond strictly to market performance and structure comparables.
-                  </p>
-                  
-                  <div className="overflow-x-auto pt-2">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-border/80 text-muted-foreground">
-                          <th className="pb-3 font-semibold">COMPARABLE FILM</th>
-                          <th className="pb-3 font-semibold text-center">NARRATIVE SIMILARITY</th>
-                          <th className="pb-3 font-semibold text-center">AUDIENCE MATCH</th>
-                          <th className="pb-3 font-semibold text-center">PRODUCTION COST MATCH</th>
-                          <th className="pb-3 font-semibold text-center">MARKET FIT</th>
-                          <th className="pb-3 font-semibold pl-4">EXPLANATION / CONTEXT</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/40">
-                        {comparables.map((comp, idx) => (
-                          <tr key={idx} className="hover:bg-secondary/20">
-                            <td className="py-3.5 font-medium text-foreground">{comp.title}</td>
-                            <td className="py-3.5 text-center text-blue-400 font-semibold">{comp.narrative}</td>
-                            <td className="py-3.5 text-center text-purple-400 font-semibold">{comp.audience}</td>
-                            <td className="py-3.5 text-center text-emerald-400 font-semibold">{comp.production}</td>
-                            <td className="py-3.5 text-center text-amber-400 font-semibold">{comp.market}</td>
-                            <td className="py-3.5 pl-4 text-muted-foreground leading-relaxed max-w-xs">{comp.explanation}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Marketing Hooks & Target Market */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="bg-[#131315] border-border">
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-200">Key Marketing Hooks</h3>
-                    <ul className="space-y-3 text-xs leading-relaxed text-muted-foreground">
-                      {marketingHooks.length === 0 && (
-                        <li className="text-muted-foreground">No marketing hooks generated yet.</li>
-                      )}
-                      {marketingHooks.map((hook: any, idx: number) => (
-                        <li key={idx}>
-                          <strong className="text-foreground block">{hook.title}</strong>
-                          {hook.description}
-                        </li>
+                {taskLoading("commercial-core") ? <AnalysisGroupSkeleton cards={3} /> : (
+                  <section className="space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Market position</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-100">Commercial viability</h3>
+                    </div>
+                    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+                      <Card className="border-[#75A5ED]/25 bg-gradient-to-br from-[#172033] to-[#131315] p-6 md:col-span-2">
+                        <div className="flex items-start justify-between gap-6">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{commercialViability.verdict}</p>
+                            <p className="mt-3 text-5xl font-bold text-[#8cb6f4]">{commercialViability.score || "—"}<span className="text-lg text-muted-foreground">/100</span></p>
+                          </div>
+                          <span className="rounded-full border border-border bg-black/20 px-3 py-1 text-[10px] font-semibold text-slate-300">{commercialViability.confidence} confidence</span>
+                        </div>
+                        <p className="mt-5 max-w-2xl text-sm leading-6 text-slate-300">{commercialViability.rationale || "Refresh this analysis to generate the commercial viability rationale."}</p>
+                      </Card>
+                      {[
+                        { label: "Theatrical", value: distributionPotentials.theatrical, color: "text-emerald-400" },
+                        { label: "OTT", value: distributionPotentials.ott, color: "text-blue-400" },
+                        { label: "Pan-India", value: distributionPotentials.panIndia, color: "text-amber-400" },
+                      ].map((item) => (
+                        <Card key={item.label} className="border-border bg-[#131315] p-6">
+                          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{item.label} potential</p>
+                          <p className={"mt-4 text-4xl font-bold " + item.color}>{item.value || 0}%</p>
+                          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-secondary">
+                            <div className="h-full rounded-full bg-current" style={{ width: item.value + "%" }} />
+                          </div>
+                        </Card>
                       ))}
-                    </ul>
-                  </CardContent>
-                </Card>
+                    </div>
+                  </section>
+                )}
 
-                <Card className="bg-[#131315] border-border">
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-200">Trailer & Viral Moments</h3>
-                    <ul className="space-y-3 text-xs leading-relaxed text-muted-foreground">
-                      {viralMoments.length === 0 && (
-                        <li className="text-muted-foreground">No viral moments generated yet.</li>
-                      )}
-                      {viralMoments.map((moment: any, idx: number) => (
-                        <li key={idx}>
-                          <strong className="text-foreground block">{moment.title}</strong>
-                          {moment.description}
-                        </li>
+                {taskLoading("commercial-forecast") ? <AnalysisGroupSkeleton cards={3} /> : (
+                  <section className="space-y-5">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Planning estimate</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-100">Revenue and release outlook</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">Heuristic screenplay-based ranges—not live box-office forecasts.</p>
+                    </div>
+                    <div className="grid gap-6 lg:grid-cols-3">
+                      <Card className="border-border bg-[#131315] p-6">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Likely gross revenue</p>
+                        <p className="mt-3 text-3xl font-bold text-emerald-400">{crore(grossPredictedRevenue.likely)}</p>
+                        <p className="mt-2 text-xs text-slate-400">{crore(grossPredictedRevenue.low)} – {crore(grossPredictedRevenue.high)}</p>
+                        <p className="mt-4 text-[11px] text-muted-foreground">{grossPredictedRevenue.confidence} confidence</p>
+                      </Card>
+                      <Card className="border-border bg-[#131315] p-6 lg:col-span-2">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Optimal release window</p>
+                        <div className="mt-3 flex flex-wrap items-baseline gap-3">
+                          <p className="text-2xl font-bold text-[#8cb6f4]">{optimalReleaseWindow.window}</p>
+                          {optimalReleaseWindow.season && <span className="rounded-full bg-[#75A5ED]/10 px-3 py-1 text-xs text-[#9bc1f7]">{optimalReleaseWindow.season}</span>}
+                        </div>
+                        <p className="mt-4 text-sm leading-6 text-slate-300">{optimalReleaseWindow.rationale || "Refresh this analysis to generate release guidance."}</p>
+                        {!!optimalReleaseWindow.avoid?.length && <p className="mt-3 text-xs text-amber-400">Avoid: {optimalReleaseWindow.avoid.join(", ")}</p>}
+                      </Card>
+                    </div>
+
+                    <Card className="border-border bg-[#131315]">
+                      <CardContent className="space-y-5 p-6">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <h3 className="text-sm font-semibold text-slate-100">Expected collection by market</h3>
+                            <p className="mt-1 text-xs text-muted-foreground">Top regions with leading state and district estimates in INR crore.</p>
+                          </div>
+                          {collectionForecast.otherMarkets && <span className="text-xs text-slate-400">Other markets: {crore(collectionForecast.otherMarkets.likely)}</span>}
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                          {(collectionForecast.regions || []).map((region: any) => (
+                            <div key={region.region} className="rounded-lg border border-border/70 bg-[#191919] p-4">
+                              <p className="text-xs font-semibold text-slate-300">{region.region}</p>
+                              <p className="mt-2 text-xl font-bold text-emerald-400">{crore(region.likely)}</p>
+                              <p className="mt-1 text-[10px] text-muted-foreground">{crore(region.low)} – {crore(region.high)}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[720px] text-left text-xs">
+                            <thead className="border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground">
+                              <tr><th className="pb-3">Region</th><th className="pb-3">State</th><th className="pb-3">Key districts / cities</th><th className="pb-3 text-right">Likely collection</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/40">
+                              {(collectionForecast.regions || []).flatMap((region: any) =>
+                                (region.states || []).map((state: any) => (
+                                  <tr key={region.region + state.state}>
+                                    <td className="py-3 text-muted-foreground">{region.region}</td>
+                                    <td className="py-3 font-medium text-slate-200">{state.state}</td>
+                                    <td className="py-3 text-slate-400">{(state.keyDistricts || []).map((district: any) => district.district + " (" + crore(district.likely) + ")").join(" · ") || "—"}</td>
+                                    <td className="py-3 text-right font-semibold text-emerald-400">{crore(state.likely)}</td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </section>
+                )}
+
+                {taskLoading("commercial-audience") ? <AnalysisGroupSkeleton cards={2} /> : (
+                  <section className="space-y-6">
+                    <div className="grid gap-6 lg:grid-cols-3">
+                      <Card className="border-border bg-[#131315] p-6">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Audience fit</p>
+                        <dl className="mt-5 space-y-4 text-xs">
+                          <div><dt className="text-muted-foreground">Primary audience</dt><dd className="mt-1 text-sm font-medium text-slate-200">{audienceMetrics.primaryAudience}</dd></div>
+                          <div><dt className="text-muted-foreground">Primary market</dt><dd className="mt-1 text-sm font-medium text-slate-200">{audienceMetrics.primaryMarket}</dd></div>
+                          <div><dt className="text-muted-foreground">Secondary market</dt><dd className="mt-1 text-sm font-medium text-slate-200">{audienceMetrics.secondaryMarket}</dd></div>
+                        </dl>
+                      </Card>
+                      <Card className="border-border bg-[#131315] p-6 lg:col-span-2">
+                        <h3 className="text-sm font-semibold text-slate-100">Comparable films</h3>
+                        <div className="mt-4 space-y-4">
+                          {comparables.map((comp, index) => (
+                            <div key={index} className="grid gap-2 border-b border-border/40 pb-4 last:border-0 last:pb-0 sm:grid-cols-[minmax(120px,0.7fr)_1fr]">
+                              <div><p className="font-semibold text-slate-200">{comp.title}</p><p className="mt-1 text-[10px] text-[#8cb6f4]">Market fit {comp.market}</p></div>
+                              <p className="leading-5 text-muted-foreground">{comp.explanation}</p>
+                            </div>
+                          ))}
+                          {!comparables.length && <p className="text-xs text-muted-foreground">No comparable titles generated yet.</p>}
+                        </div>
+                      </Card>
+                    </div>
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      {[
+                        { title: "Key marketing hooks", items: marketingHooks },
+                        { title: "Trailer and viral moments", items: viralMoments },
+                      ].map((group) => (
+                        <Card key={group.title} className="border-border bg-[#131315] p-6">
+                          <h3 className="text-sm font-semibold text-slate-100">{group.title}</h3>
+                          <div className="mt-5 space-y-4">
+                            {group.items.map((item: any, index: number) => <div key={index}><p className="text-xs font-semibold text-slate-200">{item.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p></div>)}
+                            {!group.items.length && <p className="text-xs text-muted-foreground">No insights generated yet.</p>}
+                          </div>
+                        </Card>
                       ))}
-                    </ul>
-                  </CardContent>
-                </Card>
+                    </div>
+                  </section>
+                )}
               </div>
-
-            </div>
             </SectionStatus>
           )}
-
           {/* TAB 5: PRODUCTION & BUDGET */}
           {activeTab === "Production" && (
             <SectionStatus
@@ -1525,163 +1759,111 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              hasData={!!(activeSection && sectionPayloadsRef.current[activeSection])}
               sectionName="production"
             >
-            <div className="space-y-6">
-              
-              {/* Counts Summary Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
-                {[
-                  { label: "Shoot Days", val: productionSummary.shootDays, icon: Clock, color: "text-blue-400" },
-                  { label: "Locations", val: productionSummary.locations, icon: MapPin, color: "text-emerald-400" },
-                  { label: "Night Scenes", val: productionSummary.nightScenes, icon: Activity, color: "text-purple-400" },
-                  { label: "Action Blks", val: productionSummary.actionSequences, icon: Film, color: "text-red-400" },
-                  { label: "Major Cast", val: productionSummary.majorCharacters, icon: User, color: "text-pink-400" },
-                  { label: "VFX Scenes", val: productionSummary.vfxScenes, icon: Sparkles, color: "text-cyan-400" },
-                  { label: "Extras", val: productionSummary.extras, icon: User, color: "text-orange-400" },
-                  { label: "Songs", val: productionSummary.songs, icon: Layers, color: "text-amber-400" }
-                ].map((item, idx) => (
-                  <Card key={idx} className="bg-[#131315] border-border text-center p-3">
-                    <item.icon className={`w-5 h-5 mx-auto mb-2 ${item.color}`} />
-                    <span className="text-[10px] text-muted-foreground block">{item.label}</span>
-                    <span className="text-sm font-semibold text-slate-100">{item.val}</span>
-                  </Card>
-                ))}
-              </div>
+              <div className="space-y-8">
+                {needsRefresh("production") && <RefreshAnalysisBanner onRefresh={() => analyzeSection("production", true)} />}
 
-              {/* Locations Table */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-[#131315] border-border">
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-200">Location Breakdown & Complexity</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-border/80 text-muted-foreground">
-                            <th className="pb-3 font-semibold">LOCATION NAME</th>
-                            <th className="pb-3 font-semibold text-center">SCENE COUNT</th>
-                            <th className="pb-3 font-semibold text-center">EST. SHOOT DAYS</th>
-                            <th className="pb-3 font-semibold text-center">COMPLEXITY</th>
-                            <th className="pb-3 font-semibold text-right">TYPE</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/40">
-                          {locationsList.map((loc, idx) => (
-                            <tr key={idx} className="hover:bg-secondary/10">
-                              <td className="py-2.5 font-medium text-slate-200">{loc.name}</td>
-                              <td className="py-2.5 text-center text-slate-300">{loc.scenes}</td>
-                              <td className="py-2.5 text-center text-slate-300">{loc.shootDays}</td>
-                              <td className="py-2.5 text-center">
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  loc.complexity === "High" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                                  loc.complexity === "Medium" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
-                                  "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                }`}>
-                                  {loc.complexity}
-                                </span>
-                              </td>
-                              <td className="py-2.5 text-right text-muted-foreground">{loc.type}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Cast Planning */}
-                <Card className="bg-[#131315] border-border">
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-200">Talent/Cast & Performance Demands</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-border/80 text-muted-foreground">
-                            <th className="pb-3 font-semibold">CHARACTER</th>
-                            <th className="pb-3 font-semibold">STAR DEPENDENCY</th>
-                            <th className="pb-3 font-semibold text-center">EST. DAYS</th>
-                            <th className="pb-3 font-semibold pl-2">ROLE REQUIREMENT</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/40">
-                          {castPlanning.map((cast, idx) => (
-                            <tr key={idx} className="hover:bg-secondary/10">
-                              <td className="py-2.5 font-medium text-slate-200">{cast.character}</td>
-                              <td className="py-2.5 text-xs text-blue-400 font-semibold">{cast.starDependency}</td>
-                              <td className="py-2.5 text-center text-slate-300">{cast.shootDays}</td>
-                              <td className="py-2.5 pl-2 text-muted-foreground leading-normal max-w-xs">{cast.performance}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Budget Breakdown Table */}
-              <Card className="bg-[#131315] border-border">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex justify-between items-center">
+                {taskLoading("production-budget") ? <AnalysisGroupSkeleton cards={3} /> : (
+                  <section className="space-y-5">
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-200">Budget Breakdown Estimates</h3>
-                      <p className="text-xs text-muted-foreground">Confidence limits generated by structural analysis of pages, stunt, and location demands.</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Feasibility</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-100">Budget and execution outlook</h3>
                     </div>
-                    <button
-                      onClick={() => handleSaveToInsights({
-                        Key: "Budget Analysis Summary",
-                        Question: "Give me the budget details for " + metadata.title,
-                        Answer: `**Total Est. Budget**: ${metadata.expectedBudget} \n\n**Cast**: ₹4.0–6.0 Cr \n**Crew & Technical**: ₹2.5–3.5 Cr \n**Locations & Sets**: ₹2.0–3.0 Cr \n**Post / Marketing**: ₹2.0–3.0 Cr`,
-                        Tags: "Production, Budget"
-                      })}
-                      className="px-2.5 py-1.5 bg-secondary text-xs rounded hover:bg-muted border border-border flex items-center gap-1.5 cursor-pointer font-medium"
-                    >
-                      <Bookmark className="w-3.5 h-3.5" /> Save Budget Insight
-                    </button>
-                  </div>
-                  
-                  <div className="overflow-x-auto pt-2">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-border/80 text-muted-foreground">
-                          <th className="pb-3 font-semibold">BUDGET CATEGORY</th>
-                          <th className="pb-3 font-semibold text-center">MIN ESTIMATE</th>
-                          <th className="pb-3 font-semibold text-center">MAX ESTIMATE</th>
-                          <th className="pb-3 font-semibold text-center">CONFIDENCE</th>
-                          <th className="pb-3 font-semibold text-right">ESTIMATION INDEX</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/40">
-                        {budgetBreakdown.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-secondary/10">
-                            <td className="py-3 font-medium text-slate-200">{row.category}</td>
-                            <td className="py-3 text-center text-slate-300">₹{row.min.toFixed(2)} Cr</td>
-                            <td className="py-3 text-center text-slate-300">₹{row.max.toFixed(2)} Cr</td>
-                            <td className="py-3 text-center">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                row.confidence === "High" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                                "bg-orange-500/10 text-orange-400 border border-orange-500/20"
-                              }`}>
-                                {row.confidence}
-                              </span>
-                            </td>
-                            <td className="py-3 text-right">
-                              <div className="w-24 h-1.5 bg-secondary rounded-full overflow-hidden inline-block align-middle">
-                                <div className="h-full bg-blue-400" style={{ width: `${(row.min / 2.5) * 100}%` }}></div>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
+                    <div className="grid gap-6 lg:grid-cols-3">
+                      <Card className="border-[#75A5ED]/25 bg-gradient-to-br from-[#172033] to-[#131315] p-6 lg:col-span-2">
+                        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Production feasibility</p>
+                            <p className="mt-3 text-5xl font-bold text-[#8cb6f4]">{productionFeasibility.score || "—"}<span className="text-lg text-muted-foreground">/100</span></p>
+                          </div>
+                          <span className="w-fit rounded-full border border-border bg-black/20 px-3 py-1 text-[10px] font-semibold text-slate-300">{productionFeasibility.confidence} confidence</span>
+                        </div>
+                        <p className="mt-5 text-sm leading-6 text-slate-300">{productionFeasibility.summary || "Refresh this analysis to generate a production feasibility assessment."}</p>
+                      </Card>
+                      <Card className="border-border bg-[#131315] p-6">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Estimated budget</p>
+                        <p className="mt-4 text-2xl font-bold text-emerald-400">{crore(budgetInfo.min)} – {crore(budgetInfo.max)}</p>
+                        <p className="mt-3 text-xs text-muted-foreground">{budgetInfo.confidence} confidence</p>
+                      </Card>
+                    </div>
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      <Card className="border-border bg-[#131315] p-6">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-100"><AlertTriangle className="size-4 text-amber-400" /> Execution bottlenecks</h4>
+                        <ul className="mt-4 space-y-3 text-xs leading-5 text-muted-foreground">{(productionFeasibility.bottlenecks || []).map((item: string, index: number) => <li key={index} className="border-l-2 border-amber-400/40 pl-3">{item}</li>)}{!productionFeasibility.bottlenecks?.length && <li>No bottlenecks generated yet.</li>}</ul>
+                      </Card>
+                      <Card className="border-border bg-[#131315] p-6">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-100"><Sparkles className="size-4 text-emerald-400" /> Cost-saving opportunities</h4>
+                        <ul className="mt-4 space-y-3 text-xs leading-5 text-muted-foreground">{(productionFeasibility.savings || []).map((item: string, index: number) => <li key={index} className="border-l-2 border-emerald-400/40 pl-3">{item}</li>)}{!productionFeasibility.savings?.length && <li>No savings generated yet.</li>}</ul>
+                      </Card>
+                    </div>
+                  </section>
+                )}
 
-            </div>
+                {taskLoading("production-logistics") ? <AnalysisGroupSkeleton cards={3} /> : (
+                  <section className="space-y-6">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Production footprint</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-100">Schedule and resource demands</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      {[
+                        { label: "Shoot days", val: productionSummary.shootDays, icon: Clock, color: "text-blue-400" },
+                        { label: "Locations", val: productionSummary.locations, icon: MapPin, color: "text-emerald-400" },
+                        { label: "Night scenes", val: productionSummary.nightScenes, icon: Activity, color: "text-purple-400" },
+                        { label: "Action blocks", val: productionSummary.actionSequences, icon: Film, color: "text-red-400" },
+                        { label: "Major cast", val: productionSummary.majorCharacters, icon: User, color: "text-pink-400" },
+                        { label: "VFX scenes", val: productionSummary.vfxScenes, icon: Sparkles, color: "text-cyan-400" },
+                        { label: "Extras", val: productionSummary.extras, icon: User, color: "text-orange-400" },
+                        { label: "Songs", val: productionSummary.songs, icon: Layers, color: "text-amber-400" },
+                      ].map((item) => (
+                        <Card key={item.label} className="border-border bg-[#131315] p-5">
+                          <item.icon className={"size-5 " + item.color} />
+                          <p className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{item.label}</p>
+                          <p className="mt-1 text-2xl font-bold text-slate-100">{item.val}</p>
+                        </Card>
+                      ))}
+                    </div>
+                    <div className="grid gap-6 xl:grid-cols-2">
+                      <Card className="border-border bg-[#131315]">
+                        <CardContent className="p-6">
+                          <h3 className="text-sm font-semibold text-slate-100">Location complexity</h3>
+                          <div className="mt-5 overflow-x-auto">
+                            <table className="w-full min-w-[520px] text-left text-xs">
+                              <thead className="border-b border-border text-[10px] uppercase text-muted-foreground"><tr><th className="pb-3">Location</th><th className="pb-3 text-center">Scenes</th><th className="pb-3 text-center">Days</th><th className="pb-3 text-right">Complexity</th></tr></thead>
+                              <tbody className="divide-y divide-border/40">{locationsList.map((loc, index) => <tr key={index}><td className="py-3 font-medium text-slate-200">{loc.name}<span className="block text-[10px] font-normal text-muted-foreground">{loc.type}</span></td><td className="py-3 text-center text-slate-400">{loc.scenes}</td><td className="py-3 text-center text-slate-400">{loc.shootDays}</td><td className="py-3 text-right text-[#8cb6f4]">{loc.complexity}</td></tr>)}</tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-border bg-[#131315]">
+                        <CardContent className="p-6">
+                          <h3 className="text-sm font-semibold text-slate-100">Cast and performance demands</h3>
+                          <div className="mt-5 space-y-4">{castPlanning.map((cast, index) => <div key={index} className="grid gap-2 border-b border-border/40 pb-4 last:border-0 sm:grid-cols-[1fr_auto]"><div><p className="text-xs font-semibold text-slate-200">{cast.character}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{cast.performance}</p></div><div className="text-left sm:text-right"><p className="text-xs text-[#8cb6f4]">{cast.starDependency}</p><p className="mt-1 text-[10px] text-muted-foreground">{cast.shootDays} days</p></div></div>)}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </section>
+                )}
+
+                {!taskLoading("production-budget") && (
+                  <Card className="border-border bg-[#131315]">
+                    <CardContent className="space-y-5 p-6">
+                      <div><h3 className="text-sm font-semibold text-slate-100">Budget allocation</h3><p className="mt-1 text-xs text-muted-foreground">Screenplay-based ranges in INR crore.</p></div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[620px] text-left text-xs">
+                          <thead className="border-b border-border text-[10px] uppercase text-muted-foreground"><tr><th className="pb-3">Category</th><th className="pb-3 text-center">Minimum</th><th className="pb-3 text-center">Maximum</th><th className="pb-3 text-right">Confidence</th></tr></thead>
+                          <tbody className="divide-y divide-border/40">{budgetBreakdown.map((row, index) => <tr key={index}><td className="py-3 font-medium text-slate-200">{row.category}</td><td className="py-3 text-center text-slate-400">{crore(row.min)}</td><td className="py-3 text-center text-slate-400">{crore(row.max)}</td><td className="py-3 text-right text-[#8cb6f4]">{row.confidence}</td></tr>)}</tbody>
+                        </table>
+                      </div>
+                      {!!budgetInfo.costDrivers?.length && <div className="grid gap-4 border-t border-border/50 pt-5 md:grid-cols-3">{budgetInfo.costDrivers.map((driver: any, index: number) => <div key={index}><p className="text-xs font-semibold text-slate-200">{driver.name} <span className="font-normal text-amber-400">· {driver.severity}</span></p><p className="mt-1 text-xs leading-5 text-muted-foreground">{driver.explanation}</p></div>)}</div>}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </SectionStatus>
           )}
-
           {/* TAB 6: DEVELOPMENT NOTES */}
           {activeTab === "Development" && (
             <SectionStatus
@@ -1689,129 +1871,77 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              hasData={!!(activeSection && sectionPayloadsRef.current[activeSection])}
               sectionName="development"
             >
-            <div className="space-y-6">
-              
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-200">Actionable Script & Rewrite Notes</h3>
-                  <p className="text-xs text-muted-foreground">Producer-focused suggestions to improve audience scores and lower production risks.</p>
-                </div>
-                <button
-                  onClick={() => onAskRover(`Turn the top critical development note for ${metadata.title} into a detailed rewrite outline.`)}
-                  disabled={!allDashboardsReady}
-                  title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
-                  className="px-3 py-1.5 bg-[#75A5ED]/20 hover:bg-[#75A5ED]/30 text-xs text-[#75A5ED] rounded border border-[#75A5ED]/30 flex items-center gap-1.5 cursor-pointer font-medium disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Sparkles className="w-3.5 h-3.5" /> Generate Rewrite Outline
-                </button>
-              </div>
+              <div className="space-y-8">
+                {needsRefresh("development") && <RefreshAnalysisBanner onRefresh={() => analyzeSection("development", true)} />}
 
-              <div className="space-y-4">
-                {developmentNotes.map((note, idx) => (
-                  <Card key={idx} className="bg-[#131315] border-border hover:border-border/80 transition-all">
-                    <CardContent className="p-5 space-y-4">
-                      {/* Priority Tag header */}
-                      <div className="flex justify-between items-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          note.priority === "CRITICAL" ? "bg-red-500/10 text-red-400 border border-red-500/30" :
-                          note.priority === "RECOMMENDED" ? "bg-blue-500/10 text-blue-400 border border-blue-500/30" :
-                          "bg-zinc-500/10 text-zinc-400 border border-zinc-500/30"
-                        }`}>
-                          {note.priority} PRIORITY
-                        </span>
-                        <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded font-mono">
-                          Target: {note.scene}
-                        </span>
+                {taskLoading("development-impact") ? <AnalysisGroupSkeleton cards={3} /> : (
+                  <section className="space-y-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Development readiness</p>
+                        <h3 className="mt-1 text-lg font-semibold text-slate-100">Projected rewrite impact</h3>
                       </div>
-
-                      {/* Info block */}
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-semibold text-foreground">{note.title}</h4>
-                        <p className="text-xs text-slate-300 leading-relaxed">{note.description}</p>
-                      </div>
-
-                      {/* Evidence Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-[#191919] border border-border/50 rounded-lg text-xs leading-relaxed">
-                        <div>
-                          <strong className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Current Script State</strong>
-                          <span className="text-slate-200">{note.evidence}</span>
-                        </div>
-                        <div>
-                          <strong className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Suggested Target Action</strong>
-                          <span className="text-[#75A5ED]">{note.actionable}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-
-                    <div className="p-4 bg-[#191919]/40 border-t border-border flex items-center justify-between">
-                      <button
-                        onClick={() => handleSaveToInsights({
-                          Key: `Script Note - ${note.title}`,
-                          Question: `What is the development note on: ${note.title}?`,
-                          Answer: `**Priority**: ${note.priority}\n**Target**: ${note.scene}\n**Suggestion**: ${note.description}\n**Actionable**: ${note.actionable}`,
-                          Tags: "Development, Script Notes"
-                        })}
-                        className="text-[10px] text-[#75A5ED] hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <Bookmark className="w-3.5 h-3.5" /> Save Script Note
-                      </button>
-                      <button
-                        onClick={() => onAskRover(`What specific changes can we make to resolve: "${note.title}"?`)}
-                        disabled={!allDashboardsReady}
-                        title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
-                        className="text-[10px] text-slate-400 hover:text-foreground flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <span>Ask Rover to Rewrite</span> <ArrowRight className="w-3 h-3" />
-                      </button>
+                      <button onClick={() => onAskRover(`Turn the top critical development note for ${metadata.title} into a detailed rewrite outline.`)} disabled={!allDashboardsReady} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#75A5ED]/30 bg-[#75A5ED]/15 px-4 text-xs font-semibold text-[#9bc1f7] disabled:opacity-40"><Sparkles className="size-3.5" /> Generate rewrite outline</button>
                     </div>
-                  </Card>
-                ))}
+                    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+                      <Card className="border-[#75A5ED]/25 bg-gradient-to-br from-[#172033] to-[#131315] p-6 md:col-span-2">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Readiness score</p>
+                        <div className="mt-3 flex items-end gap-4"><p className="text-5xl font-bold text-[#8cb6f4]">{developmentImpact.readinessScore || "—"}<span className="text-lg text-muted-foreground">/100</span></p><span className="mb-1 rounded-full bg-secondary px-3 py-1 text-[10px] text-slate-300">{developmentImpact.expectedCommercialLift} commercial lift</span></div>
+                        <p className="mt-5 text-sm leading-6 text-slate-300">{developmentImpact.summary || "Refresh this analysis to estimate rewrite impact."}</p>
+                      </Card>
+                      <Card className="border-border bg-[#131315] p-6"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Top priority</p><p className="mt-4 text-lg font-semibold leading-6 text-slate-100">{developmentImpact.topPriority}</p></Card>
+                      <Card className="border-border bg-[#131315] p-6"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cost impact</p><p className="mt-4 text-3xl font-bold text-amber-400">{developmentImpact.expectedCostImpact}</p><p className="mt-3 text-xs text-muted-foreground">Projected direction after rewrites</p></Card>
+                    </div>
+
+                    <Card className="border-border bg-[#131315]">
+                      <CardContent className="space-y-5 p-6">
+                        <div><h3 className="text-sm font-semibold text-slate-100">Current-to-proposed changes</h3><p className="mt-1 text-xs text-muted-foreground">Projected deltas—not a comparison against an uploaded second draft.</p></div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[720px] text-left text-xs">
+                            <thead className="border-b border-border text-[10px] uppercase text-muted-foreground"><tr><th className="pb-3">Aspect</th><th className="pb-3">Current state</th><th className="pb-3">Proposed direction</th><th className="pb-3">Expected impact</th></tr></thead>
+                            <tbody className="divide-y divide-border/40">{draftComparison.map((row: any, index: number) => <tr key={index}><td className="py-3 font-medium text-slate-200">{row.aspect}</td><td className="py-3 pr-5 text-slate-400">{row.current}</td><td className="py-3 pr-5 text-emerald-400">{row.proposed}</td><td className="py-3 text-muted-foreground">{row.impact}</td></tr>)}</tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </section>
+                )}
+
+                {taskLoading("development-notes") ? <AnalysisGroupSkeleton cards={2} /> : (
+                  <section className="space-y-5">
+                    <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Rewrite roadmap</p><h3 className="mt-1 text-lg font-semibold text-slate-100">Prioritized development notes</h3><p className="mt-1 text-xs text-muted-foreground">Producer-focused actions grounded in screenplay scenes.</p></div>
+                    <div className="space-y-5">
+                      {developmentNotes.map((note, index) => (
+                        <Card key={index} className="border-border bg-[#131315]">
+                          <CardContent className="p-6">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="max-w-3xl">
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${note.priority === "CRITICAL" ? "border-red-500/30 bg-red-500/10 text-red-400" : note.priority === "RECOMMENDED" ? "border-blue-500/30 bg-blue-500/10 text-blue-400" : "border-border bg-secondary text-slate-400"}`}>{note.priority}</span>
+                                  <span className="text-[10px] font-mono text-muted-foreground">{note.scene}</span>
+                                </div>
+                                <h4 className="mt-4 text-base font-semibold text-slate-100">{note.title}</h4>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">{note.description}</p>
+                              </div>
+                              <button onClick={() => handleSaveToInsights({ Key: `Script Note - ${note.title}`, Question: `What is the development note on: ${note.title}?`, Answer: `**Priority**: ${note.priority}\n**Target**: ${note.scene}\n**Suggestion**: ${note.description}\n**Actionable**: ${note.actionable}`, Tags: "Development, Script Notes" })} className="inline-flex shrink-0 items-center gap-2 text-xs text-[#8cb6f4] hover:underline"><Bookmark className="size-3.5" /> Save note</button>
+                            </div>
+                            <div className="mt-6 grid gap-5 rounded-xl border border-border/50 bg-[#191919] p-5 md:grid-cols-2">
+                              <div><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Current script state</p><p className="mt-2 text-xs leading-5 text-slate-300">{note.evidence}</p></div>
+                              <div><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target action</p><p className="mt-2 text-xs leading-5 text-[#9bc1f7]">{note.actionable}</p></div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      {!developmentNotes.length && <Card className="border-dashed border-border bg-[#131315] p-8 text-center text-xs text-muted-foreground">No development notes generated yet.</Card>}
+                    </div>
+                  </section>
+                )}
               </div>
-
-              {/* Draft Comparison */}
-              <Card className="bg-[#131315] border-border mt-8">
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-200">Script Draft Comparison & Deltas</h3>
-                  <p className="text-xs text-muted-foreground">Track modifications across script versions. Compare performance metrics and budget deltas side-by-side.</p>
-                  
-                  <div className="overflow-x-auto pt-2">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-border/80 text-muted-foreground text-[11px]">
-                          <th className="pb-3 font-semibold">ASPECT</th>
-                          <th className="pb-3 font-semibold text-center">CURRENT</th>
-                          <th className="pb-3 font-semibold text-center">PROPOSED</th>
-                          <th className="pb-3 font-semibold pl-4">IMPACT</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/40">
-                        {draftComparison.length === 0 && (
-                          <tr>
-                            <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                              Draft comparison will appear when development analysis includes revision deltas.
-                            </td>
-                          </tr>
-                        )}
-                        {draftComparison.map((row: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-secondary/10">
-                            <td className="py-3 font-medium text-slate-200">{row.aspect}</td>
-                            <td className="py-3 text-center text-slate-400">{row.current}</td>
-                            <td className="py-3 text-center text-emerald-400 font-semibold">{row.proposed}</td>
-                            <td className="py-3 pl-4 text-muted-foreground max-w-xs">{row.impact}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-
-            </div>
             </SectionStatus>
           )}
-
           {/* TAB 7: GREENLIGHT REPORT */}
           {activeTab === "Greenlight" && (
             <SectionStatus
@@ -1819,130 +1949,86 @@ const FilmWorkspace = memo(function FilmWorkspace({
               error={sectionError}
               onRetry={retryActiveSection}
               ready={sectionReady}
+              hasData={!!(activeSection && sectionPayloadsRef.current[activeSection])}
               sectionName="greenlight"
             >
-            <div className="space-y-6">
-              
-              {/* Executive Header Banner */}
-              <div className="bg-gradient-to-r from-blue-900/40 via-purple-900/20 to-zinc-900/10 border border-[#75A5ED]/20 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="space-y-1">
-                  <h3 className="text-lg font-semibold text-slate-100">Executive Greenlight Memo</h3>
-                  <p className="text-xs text-[#75A5ED]">Vizru Workflow Screenplay Evaluation Matrix</p>
+              <div className="space-y-8">
+                {needsRefresh("greenlight") && <RefreshAnalysisBanner onRefresh={() => analyzeSection("greenlight", true)} />}
+
+                <div className="flex flex-col gap-5 rounded-2xl border border-[#75A5ED]/25 bg-gradient-to-r from-blue-950/60 via-purple-950/30 to-[#131315] p-6 sm:flex-row sm:items-center sm:justify-between">
+                  <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8cb6f4]">Executive decision</p><h3 className="mt-2 text-xl font-semibold text-slate-100">Greenlight memo</h3><p className="mt-1 text-xs text-muted-foreground">Creative, commercial, production, and readiness synthesis.</p></div>
+                  <div className="flex flex-wrap gap-3">
+                    <button onClick={() => toast.success("Coverage report saved successfully to E-book drafts!")} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#75A5ED] px-4 text-xs font-semibold text-zinc-950 hover:bg-blue-400"><Bookmark className="size-3.5" /> Save memo</button>
+                    <button onClick={() => onAskRover("Summarize the entire Greenlight report into a 500-word executive brief for producers.")} disabled={!allDashboardsReady} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-secondary px-4 text-xs font-semibold text-slate-100 disabled:opacity-40"><Sparkles className="size-3.5 text-[#8cb6f4]" /> Create briefing</button>
+                  </div>
                 </div>
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      toast.success("Coverage report saved successfully to E-book drafts!")
-                      setActiveTab("Overview")
-                    }}
-                    className="px-4 py-2 bg-[#75A5ED] text-zinc-900 rounded-lg hover:bg-blue-400 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Bookmark className="w-4 h-4" /> Save Coverage Memo
-                  </button>
-                  
-                  <button
-                    onClick={() => onAskRover("Summarize the entire Greenlight report into a 500-word executive brief for producers.")}
-                    disabled={!allDashboardsReady}
-                    title={!allDashboardsReady ? "Available after all dashboards are generated" : undefined}
-                    className="px-4 py-2 bg-secondary border border-border text-foreground hover:bg-muted text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Sparkles className="w-4 h-4 text-[#75A5ED]" /> Briefing
-                  </button>
-                </div>
-              </div>
 
-              {/* Core Greenlight analysis */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-                
-                {/* Score and action */}
-                <Card className="bg-[#131315] border-border text-center flex flex-col justify-between gap-4 p-6 min-h-[200px] h-auto overflow-visible">
-                  <div className="space-y-2">
-                    <h4 className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Recommended Next Action</h4>
-                    <span className={`text-2xl sm:text-3xl font-extrabold block pt-2 break-words leading-tight ${
-                      recommendation.status?.toUpperCase() === 'GREENLIGHT' ? 'text-emerald-400' :
-                      recommendation.status?.toUpperCase() === 'PASS' ? 'text-red-400' :
-                      ['DEVELOP', 'CONSIDER'].includes(recommendation.status?.toUpperCase() || '') ? 'text-amber-400' :
-                      'text-[#75A5ED]'
-                    }`}>
-                      {recommendation.status}
-                    </span>
-                    <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded inline-block">
-                      Score {recommendation.score}/100
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground pt-4 border-t border-border/60">
-                    Confidence: <strong>{recommendation.confidence}</strong>
-                    <br />
-                    <span className="text-slate-300 mt-2 block leading-relaxed break-words whitespace-pre-wrap">{recommendation.summary}</span>
-                  </div>
-                </Card>
+                {taskLoading("greenlight-decision") ? <AnalysisGroupSkeleton cards={2} /> : (
+                  <section className="grid gap-6 lg:grid-cols-3">
+                    <Card className="border-[#75A5ED]/25 bg-[#131315] p-6">
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Recommended action</p>
+                      <p className={`mt-5 break-words text-3xl font-extrabold ${recommendation.status?.toUpperCase() === "GREENLIGHT" ? "text-emerald-400" : recommendation.status?.toUpperCase() === "PASS" ? "text-red-400" : "text-amber-400"}`}>{recommendation.status}</p>
+                      <div className="mt-5 flex items-center gap-3"><span className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-[#8cb6f4]">Score {recommendation.score}/100</span><span className="text-xs text-muted-foreground">{recommendation.confidence} confidence</span></div>
+                      <p className="mt-5 border-t border-border/60 pt-5 text-sm leading-6 text-slate-300">{recommendation.summary}</p>
+                    </Card>
+                    <Card className="border-border bg-[#131315] p-6 lg:col-span-2">
+                      <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-100"><CheckCircle className="size-4 text-emerald-400" /> Why this screenplay works</h4>
+                      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                        {whyItWorks.map((item, index) => <div key={index} className="rounded-lg border border-border/60 bg-[#191919] p-4"><span className="text-[10px] font-bold text-emerald-400">0{index + 1}</span><p className="mt-2 text-xs leading-5 text-slate-300">{item}</p></div>)}
+                        {!whyItWorks.length && <p className="text-xs text-muted-foreground">Strengths will appear after analysis.</p>}
+                      </div>
+                    </Card>
+                  </section>
+                )}
 
-                {/* Why it works */}
-                <Card className="bg-[#131315] border-border p-6 md:col-span-2 flex flex-col justify-between min-h-[200px] h-auto overflow-visible">
-                  <div>
-                    <h4 className="text-xs text-emerald-400 uppercase font-bold tracking-widest mb-3 flex items-center gap-1">
-                      <CheckCircle className="w-4 h-4 text-emerald-400" /> Why this screenplay works
-                    </h4>
-                    <ul className="space-y-3.5 text-xs text-muted-foreground leading-relaxed list-disc pl-4">
-                      {whyItWorks.length === 0 && <li>Insights will appear after greenlight analysis.</li>}
-                      {whyItWorks.map((item, idx) => (
-                        <li key={idx} className="break-words whitespace-pre-wrap">
-                          <span className="text-slate-200">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Exposure matrix */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Killers */}
-                <Card className="bg-[#131315] border-border">
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-red-400" /> What could kill this project
-                    </h3>
-                    <ul className="space-y-3 text-xs leading-relaxed text-muted-foreground">
-                      {killRisks.length === 0 && <li>No kill risks identified yet.</li>}
-                      {killRisks.map((risk, idx) => (
-                        <li key={idx}>
-                          <strong className="text-foreground block">{risk.title} <span className="text-red-400 font-normal">({risk.severity})</span></strong>
-                          {risk.summary}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-
-                {/* Next Steps outline */}
-                <Card className="bg-[#131315] border-border">
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-200">Recommended Production Steps</h3>
-                    <div className="space-y-4 text-xs">
-                      {nextSteps.length === 0 && (
-                        <p className="text-muted-foreground">Next steps will appear after greenlight analysis.</p>
-                      )}
-                      {nextSteps.map((s, idx) => (
-                        <div key={idx} className="flex gap-3">
-                          <div className="w-6 h-6 rounded-full bg-secondary border border-border flex items-center justify-center font-bold text-[#75A5ED] shrink-0">{idx + 1}</div>
-                          <div>
-                            <strong className="text-foreground block">{s.step}</strong>
-                            {(s.owner || s.timing) && (
-                              <span className="text-muted-foreground">
-                                {[s.owner, s.timing].filter(Boolean).join(" · ")}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                {taskLoading("greenlight-actions") ? <AnalysisGroupSkeleton cards={3} /> : (
+                  <section className="space-y-6">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Decision matrix</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-100">Investment and execution conditions</h3>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {[
+                        { label: "Creative", value: decisionMatrix.creative, color: "bg-blue-400" },
+                        { label: "Commercial", value: decisionMatrix.commercial, color: "bg-emerald-400" },
+                        { label: "Production", value: decisionMatrix.production, color: "bg-purple-400" },
+                        { label: "Readiness", value: decisionMatrix.readiness, color: "bg-amber-400" },
+                      ].map((item) => (
+                        <Card key={item.label} className="border-border bg-[#131315] p-5">
+                          <div className="flex items-end justify-between"><p className="text-xs font-semibold text-slate-300">{item.label}</p><p className="text-xl font-bold text-slate-100">{item.value || 0}</p></div>
+                          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-secondary"><div className={"h-full rounded-full " + item.color} style={{ width: item.value + "%" }} /></div>
+                        </Card>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
 
-            </div>
+                    <div className="grid gap-6 lg:grid-cols-3">
+                      <Card className="border-border bg-[#131315] p-6">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Investment outlook</p>
+                        <dl className="mt-5 space-y-4 text-xs">
+                          <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Risk level</dt><dd className="font-semibold text-amber-400">{investmentOutlook.riskLevel}</dd></div>
+                          <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Return potential</dt><dd className="font-semibold text-emerald-400">{investmentOutlook.returnPotential}</dd></div>
+                          <div><dt className="text-muted-foreground">Capital fit</dt><dd className="mt-2 leading-5 text-slate-300">{investmentOutlook.capitalFit}</dd></div>
+                        </dl>
+                        {!!investmentOutlook.conditions?.length && <ul className="mt-5 space-y-2 border-t border-border/50 pt-5 text-xs leading-5 text-muted-foreground">{investmentOutlook.conditions.map((item: string, index: number) => <li key={index}>• {item}</li>)}</ul>}
+                      </Card>
+                      <Card className="border-border bg-[#131315] p-6 lg:col-span-2">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-100"><AlertTriangle className="size-4 text-red-400" /> What could kill the project</h4>
+                        <div className="mt-5 grid gap-4 sm:grid-cols-2">{killRisks.map((risk, index) => <div key={index} className="rounded-lg border border-red-500/15 bg-red-500/5 p-4"><p className="text-xs font-semibold text-slate-200">{risk.title} <span className="font-normal text-red-400">· {risk.severity}</span></p><p className="mt-2 text-xs leading-5 text-muted-foreground">{risk.summary}</p></div>)}{!killRisks.length && <p className="text-xs text-muted-foreground">No kill risks identified yet.</p>}</div>
+                      </Card>
+                    </div>
+
+                    <Card className="border-border bg-[#131315]">
+                      <CardContent className="p-6">
+                        <h3 className="text-sm font-semibold text-slate-100">Recommended next steps</h3>
+                        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                          {nextSteps.map((step, index) => <div key={index} className="flex gap-4"><div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#75A5ED]/30 bg-[#75A5ED]/10 text-xs font-bold text-[#8cb6f4]">{index + 1}</div><div><p className="text-xs font-semibold text-slate-200">{step.step}</p>{(step.owner || step.timing) && <p className="mt-1 text-[10px] text-muted-foreground">{[step.owner, step.timing].filter(Boolean).join(" · ")}</p>}</div></div>)}
+                          {!nextSteps.length && <p className="text-xs text-muted-foreground">Next steps will appear after analysis.</p>}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </section>
+                )}
+              </div>
             </SectionStatus>
           )}
 

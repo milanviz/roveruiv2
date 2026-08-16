@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "@/app/config/config"
+import { WORKFLOW_LINKS, workflowUrl, type WorkflowLink } from "@/lib/workflow-links"
 import {
   cachedWorkflowRequest,
   invalidateWorkflowCache,
@@ -15,15 +15,6 @@ export type FilmAnalysisSection =
   | "production"
   | "development"
   | "greenlight"
-
-export const FILM_UPLOAD_WORKFLOW_URL =
-  `${APP_CONFIG.PUBLIC_API_URL}workflow.trigger/roverscriptdemo6a7ad4f143079`
-
-export const FILM_METADATA_WORKFLOW_URL =
-  `${APP_CONFIG.PUBLIC_API_URL}workflow.trigger/roverscriptdemodetails6a7b1a94831b3`
-
-export const FILM_SUMMARIZE_WORKFLOW_URL =
-  `${APP_CONFIG.PUBLIC_API_URL}workflow.trigger/roverscriptdemocontentsparent6a7ea1c86776c`
 
 export const FILM_ANALYSIS_SECTIONS: FilmAnalysisSection[] = [
   "overview",
@@ -151,12 +142,12 @@ function fieldString(value: unknown): string {
 }
 
 async function postWorkflowFields(
-  workflow: string,
+  workflow: WorkflowLink,
   fields: Record<string, string>,
 ): Promise<unknown> {
   const body = new FormData()
   Object.entries(fields).forEach(([key, value]) => body.append(key, value))
-  const response = await fetch(`${APP_CONFIG.PUBLIC_API_URL}${workflow}`, {
+  const response = await fetch(workflowUrl(workflow), {
     method: "POST",
     body,
   })
@@ -183,7 +174,7 @@ export async function fetchSavedFilmDashboard(
     dashboardLookupCacheKey(userEmail, projectId),
     WORKFLOW_CACHE_TTL.DASHBOARD_LIST,
     async () => {
-      const raw = await postWorkflowFields(APP_CONFIG.GET_FILM_DASHBOARD_WF, {
+      const raw = await postWorkflowFields(WORKFLOW_LINKS.GET_FILM_DASHBOARD, {
         user_email: userEmail,
         project_id: projectId,
       })
@@ -224,7 +215,7 @@ export async function saveFilmDashboard(input: SavedFilmDashboard): Promise<unkn
   for (const section of FILM_ANALYSIS_SECTIONS) {
     fields[`file_${section}`] = JSON.stringify(input.sections[section])
   }
-  const result = await postWorkflowFields(APP_CONFIG.SAVE_FILM_DASHBOARD_WF, fields)
+  const result = await postWorkflowFields(WORKFLOW_LINKS.SAVE_FILM_DASHBOARD, fields)
   writeWorkflowCache(
     dashboardCacheKey(input.user_email, input.project_id),
     input,
@@ -401,157 +392,6 @@ export function coerceJsonObject(value: unknown): Record<string, unknown> | null
   return null
 }
 
-type FilmProjectContext = {
-  title: string
-  language: string | null
-  genre: string | null
-  target_market: string | null
-  release_strategy: string | null
-  expected_budget: string | null
-}
-
-function projectContext(project: FilmProjectContext): string {
-  return [
-    `Title: ${project.title}`,
-    `Language: ${project.language || "unknown"}`,
-    `Genre: ${project.genre || "unknown"}`,
-    `Target market: ${project.target_market || "unknown"}`,
-    `Release strategy: ${project.release_strategy || "unknown"}`,
-    `Expected budget: ${project.expected_budget || "unknown"}`,
-  ].join("\n")
-}
-
-const GROUNDING = `Ground every claim ONLY in the attached screenplay. Do not invent characters, places, or plot points not present in the script. If something is unclear, use "not specified". Return JSON only — no markdown, no prose outside the JSON object.`
-
-const SECTION_SCHEMAS: Record<FilmAnalysisSection, string> = {
-  overview: `{    
-  "recommendation": { "status": "GREENLIGHT|DEVELOP|PASS", "score": 0-100, "confidence": "High|Medium|Low", "summary": "string" },
-  "scores": { "story": 0-100, "commercial": 0-100, "production": 0-100, "audience": 0-100, "originality": 0-100, "risk": 0-100 },
-  "logline": "string",
-  "synopsis": "string (2-4 paragraphs)",
-  "attributes": { "pages": number, "runtimeMinutes": number, "shootDays": number, "locations": number, "nightScenes": number, "actionSequences": number, "majorCast": number, "vfxScenes": number, "extras": number, "songs": number },
-  "risks": [{ "title": "string", "severity": "High|Medium|Low", "summary": "string", "evidence": "string" }],
-  "opportunities": [{ "title": "string", "summary": "string" }]
-}`,
-  story: `{
-  "scores": { "story": 0-100, "originality": 0-100 },
-  "storyScorecard": {
-    "structuralPacing": "Excellent|Good|Fair|Weak (short label only, max 2 words)",
-    "structuralPacingNotes": "1-2 sentences on pacing",
-    "climaxBuild": "Excellent|Good|Fair|Weak or a short score like 85/100 (max 12 chars)",
-    "climaxBuildNotes": "1-2 sentences on climax escalation"
-  },
-  "timelineEvents": [{ "title": "string", "description": "string", "page": "Page N or number", "tension": 0-100 }],
-  "cinemaEvaluation": {
-    "heroIntro": "Excellent|Good|Fair|Weak|N/A",
-    "heroIntroDesc": "string",
-    "intervalCliffhanger": "Excellent|Good|Fair|Weak|N/A",
-    "intervalCliffhangerDesc": "string",
-    "climaxEmotionalPayoff": "Excellent|Good|Fair|Weak|N/A",
-    "climaxEmotionalPayoffDesc": "string",
-    "massMoments": "Excellent|Good|Fair|Weak|N/A",
-    "massMomentsDesc": "string",
-    "songsIntegration": "Excellent|Good|Fair|Weak|Optional|N/A",
-    "songsIntegrationDesc": "string"
-  },
-  "indianCinemaSignals": [{ "name": "string", "rating": "string", "explanation": "string" }],
-  "tensionCurve": [{ "label": "short beat name (max 3 words)", "tension": 0-100 }]
-}`,
-  characters: `{
-  "charactersList": [{
-    "name": "string",
-    "role": "string",
-    "description": "string",
-    "presence": "e.g. 85%",
-    "dialogue": "e.g. 38%",
-    "arc": "Strong|Moderate|Weak|Exceptional",
-    "casting": "Critical|High|Medium|Low",
-    "goal": "string",
-    "motivation": "string",
-    "conflict": "string",
-    "transformation": "string"
-  }]
-}`,
-  commercial: `{
-  "distributionPotentials": { "theatrical": 0-100, "ott": 0-100, "panIndia": 0-100 },
-  "comparables": [{ "name": "string", "narrativeSimilarity": 0-100, "audienceMatch": 0-100, "costMatch": 0-100, "marketFit": 0-100, "context": "string" }],
-  "marketingHooks": [{ "title": "string", "description": "string" }],
-  "viralMoments": [{ "title": "string", "description": "string" }],
-  "audienceMetrics": {
-    "primaryAudience": "string",
-    "primaryMarket": "string",
-    "secondaryMarket": "string",
-    "metrics": [{ "name": "string", "score": 0-100 }]
-  }
-}`,
-  production: `{
-  "productionSummary": {
-    "shootDays": number,
-    "locations": number,
-    "nightScenes": number,
-    "actionSequences": number,
-    "majorCharacters": number,
-    "extras": number,
-    "vfxScenes": number,
-    "songs": number
-  },
-  "attributes": { "pages": number, "runtimeMinutes": number, "shootDays": number, "locations": number, "nightScenes": number, "actionSequences": number, "majorCast": number, "vfxScenes": number, "extras": number, "songs": number },
-  "locationsList": [{ "name": "string", "scenes": number, "shootDays": number, "complexity": "Low|Medium|High", "type": "string" }],
-  "castPlanning": [{ "character": "string", "starDependency": "string", "performance": "string", "shootDays": number }],
-  "budgetBreakdown": [{ "category": "string", "min": number, "max": number, "confidence": "High|Medium|Low" }],
-  "budgetInfo": {
-    "min": number,
-    "max": number,
-    "currency": "INR",
-    "confidence": "High|Medium|Low",
-    "costDrivers": [{ "name": "string", "severity": "High|Medium|Low", "explanation": "string" }]
-  }
-}`,
-  development: `{
-  "rewriteNotes": [{
-    "priority": "CRITICAL|RECOMMENDED|OPTIONAL",
-    "target": "Scenes X-Y",
-    "title": "string",
-    "summary": "string",
-    "before": "string",
-    "action": "string"
-  }],
-  "developmentNotes": [{
-    "priority": "CRITICAL|RECOMMENDED|OPTIONAL",
-    "title": "string",
-    "description": "string",
-    "scene": "string",
-    "before": "string",
-    "actionable": "string"
-  }],
-  "draftComparison": [{
-    "aspect": "string",
-    "current": "string",
-    "proposed": "string",
-    "impact": "string"
-  }]
-}`,
-  greenlight: `{
-  "recommendation": { "status": "GREENLIGHT|DEVELOP|PASS|REQUEST REWRITE", "score": 0-100, "confidence": "High|Medium|Low", "summary": "string" },
-  "whyItWorks": ["string", "string", "string"],
-  "killRisks": [{ "title": "string", "severity": "High|Medium|Low", "summary": "string" }],
-  "nextSteps": [{ "step": "string", "owner": "string", "timing": "string" }]
-}`,
-}
-
-export function buildSectionPrompt(
-  section: FilmAnalysisSection,
-  project: FilmProjectContext,
-): string {
-  return `${GROUNDING}
-
-Project context:
-${projectContext(project)}
-
-Analyze the screenplay for the "${section}" tab of a film intelligence workspace.
-Return a single JSON object matching this schema exactly (include all keys; use empty arrays if none):
-${SECTION_SCHEMAS[section]}`
-}
 
 export async function fetchMetadataWorkflow(scriptId: string, force = false): Promise<{
   metadata: unknown
@@ -562,7 +402,7 @@ export async function fetchMetadataWorkflow(scriptId: string, force = false): Pr
     metadataCacheKey(scriptId),
     WORKFLOW_CACHE_TTL.FILE_METADATA,
     async () => {
-      const workflowRes = await fetch(FILM_METADATA_WORKFLOW_URL, {
+      const workflowRes = await fetch(workflowUrl(WORKFLOW_LINKS.FILM_METADATA), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script_id: scriptId }),
@@ -584,7 +424,7 @@ export async function fetchMetadataWorkflow(scriptId: string, force = false): Pr
 }
 
 export async function fetchSummarizeWorkflow(fileUrl: string, prompt: string, section: string): Promise<unknown> {
-  const workflowRes = await fetch(FILM_SUMMARIZE_WORKFLOW_URL, {
+  const workflowRes = await fetch(workflowUrl(WORKFLOW_LINKS.FILM_SUMMARIZE), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url: fileUrl, prompt, section_name: section }),

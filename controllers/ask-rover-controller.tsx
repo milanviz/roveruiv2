@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "@/app/config/config"
+import { WORKFLOW_LINKS, workflowUrl } from "@/lib/workflow-links"
 import { ProjectType } from "@/types/project-types";
 import { useAskRoverStore } from "@/app/store/ask-rover/ask-rover.store";
 import { setCurrentController, getCurrentController } from "@/app/utils/streamingController";
@@ -82,7 +82,7 @@ const insertConversationMessage = async ({
     }
 
     const response = await fetch(
-        APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.AFTER_MESSAGE_RECEIVE_WF,
+        workflowUrl(WORKFLOW_LINKS.AFTER_MESSAGE_RECEIVE),
         {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -109,7 +109,7 @@ export const GetChatHistory = async (
 
     try {
         const res = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.CHAT_HISTORY_WF,
+            workflowUrl(WORKFLOW_LINKS.CHAT_HISTORY),
             {
                 method: "POST",
                 body: formData,
@@ -229,7 +229,7 @@ export const getMessageResponse = async (
         }
 
         const response = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.ASK_ROVER_CHAT_WF,
+            workflowUrl(WORKFLOW_LINKS.ASK_ROVER_CHAT),
             {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -335,7 +335,7 @@ export const SaveToinsights = async (
         formData.append("data", JSON.stringify([data]));
 
         const res = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.ADD_TO_INSIGHTS_WF,
+            workflowUrl(WORKFLOW_LINKS.ADD_TO_INSIGHTS),
             {
                 method: "POST",
                 body: formData,
@@ -370,7 +370,7 @@ export const GetInsights = async (
 
     try {
         const res = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.GET_INSIGHTS_WF,
+            workflowUrl(WORKFLOW_LINKS.GET_INSIGHTS),
             {
                 method: "POST",
                 body: formData,
@@ -413,7 +413,7 @@ export const ArchiveInsights = async (
 
     try {
         const res = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.ARCHIVE_INSIGHT_WF,
+            workflowUrl(WORKFLOW_LINKS.ARCHIVE_INSIGHT),
             {
                 method: "POST",
                 body: formData,
@@ -441,7 +441,7 @@ export const ExportInsight = async (
 
     try {
         const res = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.EXPORT_INSIGHTS_WF,
+            workflowUrl(WORKFLOW_LINKS.EXPORT_INSIGHTS),
             {
                 method: "POST",
                 body: formData,
@@ -474,7 +474,7 @@ export const translateAnswer = async (
     console.log("translateAnswer called with answer:", answer);
     try {
         const res = await fetch(
-            APP_CONFIG.PUBLIC_API_URL + APP_CONFIG.TRANSLATE_WF,
+            workflowUrl(WORKFLOW_LINKS.TRANSLATE),
             {
                 method: "POST",
                 body: formData,
