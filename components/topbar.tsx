@@ -6,7 +6,7 @@ import { Image, Link } from "@/lib/spa-router"
 import { Menu, Check } from "lucide-react"
 import { useLanguage } from "@/lib/language-context"
 import { useProjectStore } from "@/app/store/project/project.store"
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 
 interface TopbarProps {
   onMenuClick: () => void
@@ -14,15 +14,14 @@ interface TopbarProps {
 }
 
 const languages = [
-  { code: "en", name: "English", flag: "/assets/images/english.png" },
-  { code: "ja", name: "Japanese", flag: "/assets/images/japan.png" },
+  { code: "en", name: "English", flag: "images/english.png" },
+  { code: "ja", name: "Japanese", flag: "images/japan.png" },
 ]
 
 export default function Topbar({ onMenuClick, menuOpen = false }: TopbarProps) {
   const { language, setLanguage, t } = useLanguage()
   const [isLanguageOpen, setIsLanguageOpen] = useState(false)
   const [curUserData, setCurUserData] = useState({ email: "", user: "" });
-  const assetPrefix = ASSET_PREFIX;
   const selectedLanguage = languages.find((lang) => lang.code === language) || languages[0]
 
   const { currentUser } = useProjectStore();
@@ -58,7 +57,7 @@ export default function Topbar({ onMenuClick, menuOpen = false }: TopbarProps) {
           <Menu size={20} />
         </button>
         <Link href="/">
-          <Image src={`${assetPrefix}/assets/icons/rover_label.svg`} alt="Rover Logo" width={135} height={28} />
+          <Image src={assetPath("icons/rover_label.svg")} alt="Rover Logo" width={135} height={28} />
           {/* <h1 className="text-sm font-bold text-sidebar-foreground hidden md:block tracking-wide cursor-pointer">
             ROVER
           </h1> */}
@@ -72,7 +71,7 @@ export default function Topbar({ onMenuClick, menuOpen = false }: TopbarProps) {
             onClick={() => setIsLanguageOpen(!isLanguageOpen)}
             className="flex items-center gap-2 px-3 py-2 hover:bg-sidebar-accent rounded-lg transition-colors text-sidebar-foreground text-sm cursor-pointer"
           >
-            <span className="text-lg"><Image src={`${assetPrefix + selectedLanguage.flag}`} alt="Rover Logo" width={17} height={17} /></span>
+            <span className="text-lg"><Image src={assetPath(selectedLanguage.flag)} alt="Rover Logo" width={17} height={17} /></span>
             <span className="hidden md:inline">{selectedLanguage.name}</span>
             <ChevronDown size={16} className={`transition-transform ${isLanguageOpen ? "rotate-180" : ""}`} />
           </button> */}
@@ -87,7 +86,7 @@ export default function Topbar({ onMenuClick, menuOpen = false }: TopbarProps) {
                     onClick={() => handleLanguageSelect(lang)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors text-sm text-popover-foreground cursor-pointer"
                   >
-                    <span className="text-base"><Image src={`${assetPrefix + lang.flag}`} alt="Rover Logo" width={17} height={17} /></span>
+                    <span className="text-base"><Image src={assetPath(lang.flag)} alt="Rover Logo" width={17} height={17} /></span>
                     <span className="flex-1 text-left">{lang.name}</span>
                     {selectedLanguage.code === lang.code && <Check size={16} className="text-green-500" />}
                   </button>

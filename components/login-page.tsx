@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react"
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react"
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 import { DEMO_USERNAME, signInDemo } from "@/lib/static-auth"
 
 export default function LoginPage() {
@@ -24,7 +24,7 @@ export default function LoginPage() {
         <div className="mb-9 flex flex-col items-center text-center">
           <div className="mb-7 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_0_40px_rgba(121,113,255,0.14)]">
             <img
-              src={`${ASSET_PREFIX}/assets/icons/rover_icon.svg`}
+              src={assetPath("icons/rover_icon.svg")}
               alt="Rover"
               width={29}
               height={29}

@@ -14,7 +14,7 @@ import html2canvas from "html2canvas"
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx"
 import { Image, useRouter } from "@/lib/spa-router"
 import MarkdownRenderer from "./markdownrenderer"
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 import { toast } from "sonner"
 import { PageState, Skeleton } from "@/components/ui/async-state"
 
@@ -693,7 +693,6 @@ export default function SavedInsightsContent() {
         )
     }
 
-    const assetPrefix = ASSET_PREFIX;
 
     return (
         <div className="flex h-full flex-1 justify-center overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
@@ -829,7 +828,7 @@ export default function SavedInsightsContent() {
 
                                                         <span className="flex items-center gap-1">
                                                             <Image
-                                                                src={`${assetPrefix}/assets/images/source.png`}
+                                                                src={assetPath("images/source.png")}
                                                                 alt="Source Image"
                                                                 width={13}
                                                                 height={13}
@@ -845,7 +844,7 @@ export default function SavedInsightsContent() {
                                                                 <span>|</span>
                                                                 <span className="flex items-center gap-1">
                                                                     <Image
-                                                                        src={`${assetPrefix}/assets/icons/user-white.svg`}
+                                                                        src={assetPath("icons/user-white.svg")}
                                                                         alt="Source Image"
                                                                         width={13}
                                                                         height={13}
@@ -867,7 +866,7 @@ export default function SavedInsightsContent() {
                                                                     className="w-[31.29px] h-[31.29px] flex items-center justify-center rounded-full bg-[#201F1F] hover:bg-secondary text-icon-secondary hover:text-destructive cursor-pointer"
                                                                 >
                                                                     <Image
-                                                                        src={`${assetPrefix}/assets/icons/archive.svg`}
+                                                                        src={assetPath("icons/archive.svg")}
                                                                         alt="Archive Icon"
                                                                         width={14}
                                                                         height={14}

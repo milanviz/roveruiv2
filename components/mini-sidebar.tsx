@@ -4,7 +4,7 @@ import { type LucideIcon } from "lucide-react"
 import { Image, Link } from "@/lib/spa-router"
 import { usePathname } from "@/lib/spa-router"
 import { LogOut } from "lucide-react"
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 import { signOutDemo } from "@/lib/static-auth"
 
 interface MiniNavItem {
@@ -21,7 +21,6 @@ const miniNavItems: MiniNavItem[] = [
 ]
 
 export default function MiniSidebar({ className = "", onNavigate }: { className?: string; onNavigate?: () => void }) {
-  const assetPrefix = ASSET_PREFIX
   const pathname = usePathname()
 
   const handleSignOut = () => {
@@ -34,7 +33,7 @@ export default function MiniSidebar({ className = "", onNavigate }: { className?
       <Link href="/" onClick={onNavigate} className="focus-ring rounded-lg">
         <div className="w-20 h-[49px] pb-2 flex items-center justify-center cursor-pointer border-b border-border">
           <Image
-            src={`${assetPrefix}/assets/icons/rover_icon.svg`}
+            src={assetPath("icons/rover_icon.svg")}
             alt="Mini Logo"
             width={24}
             height={24}
@@ -63,7 +62,7 @@ export default function MiniSidebar({ className = "", onNavigate }: { className?
                   }`}
               >
                 <Image
-                  src={`${assetPrefix}/assets/icons/${item.icon}`}
+                  src={assetPath(`icons/${item.icon}`)}
                   alt={item.label}
                   width={18}
                   height={18}

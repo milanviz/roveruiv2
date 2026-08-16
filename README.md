@@ -20,6 +20,7 @@ Optional Vite environment variables:
 
 ```bash
 VITE_BASE_PATH=/
+VITE_ASSET_BASE_PATH=/movies/dist
 VITE_PUBLIC_API_URL=https://ai-demo.vizru-ras.com/
 VITE_SOCKET_URL=https://chat-react-app.vizru-ras.com
 VITE_SOCKET_HANDSHAKE_TOKEN=...

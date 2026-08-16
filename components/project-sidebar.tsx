@@ -1,10 +1,9 @@
 "use client"
 import { Image, useRouter, usePathname } from "@/lib/spa-router";
 import { useProjectStore } from "@/app/store/project/project.store";
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 import { cn } from "@/lib/utils"
 
-const assetPrefix = ASSET_PREFIX;
 
 export default function ProjectSidebar({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
   const selectedProject = useProjectStore((state) => state.selectedProject);
@@ -24,7 +23,7 @@ export default function ProjectSidebar({ className, onNavigate }: { className?: 
           <button className="w-full container-gradient text-white px-5 py-3 rounded-lg text-[15px] font-light hover:bg-primary/90 transition-colors flex items-center gap-2 cursor-pointer"
             onClick={() => { router.push(`/projects/ask-rover?projectId=${projectId}`); onNavigate?.() }}>
             <Image
-              src={`${assetPrefix}/assets/icons/ai.svg`}
+              src={assetPath("icons/ai.svg")}
               alt="Ask Rover"
               width={16}
               height={16}
@@ -46,7 +45,7 @@ export default function ProjectSidebar({ className, onNavigate }: { className?: 
               onClick={() => { router.push(`/projects/insights?projectId=${projectId}`); onNavigate?.() }}
               >
               <Image
-                src={`${assetPrefix}/assets/images/Saved_Insights.png`}
+                src={assetPath("images/Saved_Insights.png")}
                 alt="Saved Insights"
                 width={18}
                 height={18}

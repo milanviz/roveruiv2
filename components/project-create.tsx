@@ -7,7 +7,7 @@ import { Image, useRouter, useSearchParams } from "@/lib/spa-router"
 import { useState, useEffect, useRef } from "react"
 import { ProjectCreateController } from "@/controllers/project-controller"
 import { useProjectStore } from "@/app/store/project/project.store"
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 import CustomButton from "./custom-button"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/async-state"
@@ -297,7 +297,6 @@ export default function ProjectCreate() {
     }
   };
 
-  const assetPrefix = ASSET_PREFIX;
 
   return (
     <div className="flex flex-col h-full overflow-auto scrollbar-hide">
@@ -497,7 +496,7 @@ export default function ProjectCreate() {
                 <CardContent className="w-full p-4 flex flex-row items-center gap-4">
                   <div className="flex items-center justify-center w-[63px] h-[61px] shrink-0 p-2 rounded-[9px] bg-[#2F2E2E80]">
                     <Image
-                      src={`${assetPrefix}/assets/images/${specialist.icon}`}
+                      src={assetPath(`images/${specialist.icon}`)}
                       alt="Agent Icon"
                       width={45}
                       height={45}

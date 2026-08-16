@@ -1,5 +1,5 @@
 import { Image } from "@/lib/spa-router"
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 
 interface CustomButtonProps {
     disable: boolean;
@@ -9,7 +9,6 @@ interface CustomButtonProps {
 }
 
 const CustomButton = ({ disable, handleFN, btnTitle, isLoading = false }: CustomButtonProps) => {
-    const assetPrefix = ASSET_PREFIX;
 
     return (
         <button
@@ -30,7 +29,7 @@ const CustomButton = ({ disable, handleFN, btnTitle, isLoading = false }: Custom
                 <div className="flex items-center gap-2">
                     <div className="relative w-[20px] h-[20px]">
                         <Image
-                            src={`${assetPrefix}/assets/gif/star-ai-loader.gif`}
+                            src={assetPath("gif/star-ai-loader.gif")}
                             alt="Loading"
                             fill
                             className="object-contain"

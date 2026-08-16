@@ -1,6 +1,13 @@
-const configuredBase = import.meta.env.BASE_URL || "/"
+const configuredAssetBase = (import.meta.env.VITE_ASSET_BASE_PATH as string | undefined)?.trim()
 
-export const ASSET_PREFIX = configuredBase === "/" ? "" : configuredBase.replace(/\/$/, "")
+// Vizru serves production static files from /movies/dist/assets. Keep the
+// local Vite paths unchanged while giving every deployed icon/image one base.
+export const ASSET_PREFIX = (
+  configuredAssetBase || (import.meta.env.DEV ? "" : "/movies/dist")
+).replace(/\/$/, "")
+
+export const assetPath = (path: string) =>
+  `${ASSET_PREFIX}/assets/${path.replace(/^\/?assets\//, "").replace(/^\//, "")}`
 
 export const ENV = {
   PUBLIC_API_URL: import.meta.env.VITE_PUBLIC_API_URL as string | undefined,

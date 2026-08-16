@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { Image, useRouter } from "@/lib/spa-router"
-import { ASSET_PREFIX } from "@/lib/env"
+import { assetPath } from "@/lib/env"
 import { useProjectStore } from "@/app/store/project/project.store"
 import { GetProjectsController } from "@/controllers/project-controller"
 import type { ProjectType } from "@/types/project-types"
@@ -32,7 +32,7 @@ export default function DashboardContent() {
     <div className="h-full overflow-y-auto scrollbar-hide">
       <div className="page-container space-y-10 py-8 sm:space-y-12 sm:py-12">
         <header className="text-center">
-          <h1 className="flex items-center justify-center gap-2 text-3xl font-medium sm:text-4xl"><Image src={`${ASSET_PREFIX}/assets/images/hand.png`} alt="" width={42} height={42} /><span className="text-gradient">Welcome!</span></h1>
+          <h1 className="flex items-center justify-center gap-2 text-3xl font-medium sm:text-4xl"><Image src={assetPath("images/hand.png")} alt="" width={42} height={42} /><span className="text-gradient">Welcome!</span></h1>
           <p className="mt-3 text-lg font-light text-lighttext sm:text-2xl">What would you like to start with today?</p>
         </header>
 
@@ -40,7 +40,7 @@ export default function DashboardContent() {
           <SectionHeader title="Create Project" />
           <p className="text-lg font-light text-lighttext sm:text-xl">Choose an AI specialist</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {AiAgentList.map((agent) => <button type="button" key={agent.id} onClick={() => { setSelectedAiAgent(agent.id); router.push(`/projects/project-create?title=${encodeURIComponent(agent.title)}`) }} className="focus-ring rover-surface flex min-h-24 items-center gap-3 p-3 text-left transition hover:border-primary/50 hover:bg-primary/10"><span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-white/5"><Image src={`${ASSET_PREFIX}/assets/images/${agent.icon}`} alt="" width={42} height={42} /></span><span className="text-sm text-foreground">{agent.title}</span></button>)}
+            {AiAgentList.map((agent) => <button type="button" key={agent.id} onClick={() => { setSelectedAiAgent(agent.id); router.push(`/projects/project-create?title=${encodeURIComponent(agent.title)}`) }} className="focus-ring rover-surface flex min-h-24 items-center gap-3 p-3 text-left transition hover:border-primary/50 hover:bg-primary/10"><span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-white/5"><Image src={assetPath(`images/${agent.icon}`)} alt="" width={42} height={42} /></span><span className="text-sm text-foreground">{agent.title}</span></button>)}
           </div>
         </section>
 
