@@ -554,8 +554,19 @@ const FilmWorkspace = memo(function FilmWorkspace({
     if (timeout) window.clearTimeout(timeout)
     taskTimeoutsRef.current.delete(task.key)
     taskRetriesRef.current.delete(task.key)
-    currentTaskRef.current.delete(task.section)
-    inflightRef.current.delete(task.socketTag)
+    const activeTask = currentTaskRef.current.get(task.section)
+    const isActiveTask = activeTask?.key === task.key
+    if (isActiveTask) {
+      currentTaskRef.current.delete(task.section)
+      inflightRef.current.delete(task.socketTag)
+    }
+    const remainingQueue = (taskQueuesRef.current.get(task.section) || [])
+      .filter((queuedTask) => queuedTask.key !== task.key)
+    if (remainingQueue.length > 0 || isActiveTask) {
+      taskQueuesRef.current.set(task.section, remainingQueue)
+    } else {
+      taskQueuesRef.current.delete(task.section)
+    }
 
     const sectionTasks = tasksForSection(task.section)
     const complete = sectionTasks.every((item) => nextTaskStates[item.key] === "ready")
@@ -571,17 +582,28 @@ const FilmWorkspace = memo(function FilmWorkspace({
       })
       setSectionErrors(prev => ({ ...prev, [task.section]: null }))
     }
-    void triggerNextTask(task.section)
+    if (isActiveTask) void triggerNextTask(task.section)
   }
 
   // Calls are sequential, so every task can use the backend's stable section event.
   FILM_ANALYSIS_SECTIONS.forEach(section => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useVizruRealtime(section, (payload: any) => {
-      const task = currentTaskRef.current.get(section)
-      if (!task) return
-      console.log(`[FilmWorkspace] socket → ${section} (${task.key})`, payload)
-      applyTaskPayload(task, payload)
+      const parsed = coerceJsonObject(payload?.output ?? payload)
+      if (!parsed) return
+      const activeTask = currentTaskRef.current.get(section)
+      const matchedTask = activeTask && taskHasData(activeTask.key, parsed)
+        ? activeTask
+        : tasksForSection(section).find((task) => taskHasData(task.key, parsed))
+      if (!matchedTask) {
+        console.warn(`[FilmWorkspace] Ignoring unrecognized ${section} payload.`, parsed)
+        return
+      }
+      console.log(`[FilmWorkspace] socket → ${section} (${matchedTask.key})`, payload)
+      applyTaskPayload(
+        "prompt" in matchedTask ? matchedTask as PromptTask : { ...matchedTask, prompt: "" },
+        parsed,
+      )
     })
   })
 
