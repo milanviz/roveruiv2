@@ -21,7 +21,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "sonner"
 import type { FilmAnalysisSection } from "@/lib/film-workflows"
-import { FILM_ANALYSIS_SECTIONS, fetchSummarizeWorkflow } from "@/lib/film-workflows"
+import { FILM_ANALYSIS_SECTIONS, coerceJsonObject, fetchSummarizeWorkflow } from "@/lib/film-workflows"
 import { buildSectionPromptTasks, FILM_ANALYSIS_TASKS, tasksForSection, type FilmAnalysisTask } from "@/lib/film-prompts"
 import { useVizruRealtime } from "@/lib/use-vizru-realtime"
 
@@ -49,8 +49,8 @@ const TAB_TO_SECTION: Record<string, FilmAnalysisSection> = {
   Greenlight: "greenlight",
 }
 
-const AUTO_GENERATED_SECTIONS: FilmAnalysisSection[] = ["overview", "story", "characters"]
-const MANUAL_GENERATED_SECTIONS: FilmAnalysisSection[] = ["commercial", "production", "development", "greenlight"]
+const AUTO_GENERATED_SECTIONS: FilmAnalysisSection[] = FILM_ANALYSIS_SECTIONS
+const MANUAL_GENERATED_SECTIONS: FilmAnalysisSection[] = FILM_ANALYSIS_SECTIONS
 
 const SECTION_TO_TAB = Object.fromEntries(
   Object.entries(TAB_TO_SECTION).map(([tab, section]) => [section, tab]),
@@ -347,6 +347,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
   
   const inflightRef = useRef<Map<string, Promise<void>>>(new Map())
   const taskQueuesRef = useRef<Map<FilmAnalysisSection, Array<FilmAnalysisTask & { prompt: string }>>>(new Map())
+  const taskTimeoutsRef = useRef<Map<string, number>>(new Map())
   const sectionPayloadsRef = useRef<Partial<Record<FilmAnalysisSection, Record<string, unknown>>>>({})
   const dashboardSavedRef = useRef(false)
   const readySectionsRef = useRef(readySections)
@@ -409,7 +410,20 @@ const FilmWorkspace = memo(function FilmWorkspace({
     inflightRef.current.set(nextTask.socketTag, Promise.resolve())
 
     try {
-      await fetchSummarizeWorkflow(fileUrlRef.current!, nextTask.prompt, nextTask.socketTag)
+      const response = await fetchSummarizeWorkflow(fileUrlRef.current!, nextTask.prompt, nextTask.socketTag)
+      if (!inflightRef.current.has(nextTask.socketTag)) return
+
+      const directPayload = coerceJsonObject(response)
+      if (directPayload && taskHasData(nextTask.key, directPayload)) {
+        applyTaskPayload(nextTask, directPayload)
+        return
+      }
+
+      const timeout = window.setTimeout(() => {
+        if (!inflightRef.current.has(nextTask.socketTag)) return
+        failTask(nextTask, `${nextTask.key.replaceAll("-", " ")} timed out. Retry this analysis to fill the missing group.`)
+      }, 90_000)
+      taskTimeoutsRef.current.set(nextTask.socketTag, timeout)
     } catch (error: any) {
       console.error(`Failed to trigger ${nextTask.key}:`, error)
       failTask(nextTask, error?.message || `Failed to start ${nextTask.key.replaceAll("-", " ")}.`)
@@ -417,6 +431,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
   }
 
   const failTask = (task: FilmAnalysisTask, message: string) => {
+    const timeout = taskTimeoutsRef.current.get(task.socketTag)
+    if (timeout) window.clearTimeout(timeout)
+    taskTimeoutsRef.current.delete(task.socketTag)
     const nextTaskStates = { ...taskStatesRef.current, [task.socketTag]: "error" as const }
     taskStatesRef.current = nextTaskStates
     setTaskStates(nextTaskStates)
@@ -434,13 +451,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
   /** Merge one task's socket payload into its parent dashboard section. */
   const applyTaskPayload = (task: FilmAnalysisTask, payload: any) => {
     const outputStr: unknown = payload?.output ?? payload
-    let parsed: Record<string, any> | null = null
-
-    if (outputStr && typeof outputStr === "string" && outputStr.trim() !== "") {
-      try { parsed = JSON.parse(outputStr) } catch { parsed = null }
-    } else if (outputStr && typeof outputStr === "object") {
-      parsed = outputStr as Record<string, any>
-    }
+    const parsed = coerceJsonObject(outputStr)
 
     if (!parsed) {
       failTask(task, `No data returned for ${task.key.replaceAll("-", " ")}.`)
@@ -462,6 +473,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
     const nextTaskStates = { ...taskStatesRef.current, [task.socketTag]: "ready" as const }
     taskStatesRef.current = nextTaskStates
     setTaskStates(nextTaskStates)
+    const timeout = taskTimeoutsRef.current.get(task.socketTag)
+    if (timeout) window.clearTimeout(timeout)
+    taskTimeoutsRef.current.delete(task.socketTag)
     inflightRef.current.delete(task.socketTag)
 
     const sectionTasks = tasksForSection(task.section)
@@ -569,6 +583,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
     dashboardSavedRef.current = false
     inflightRef.current.clear()
     taskQueuesRef.current.clear()
+    taskTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout))
+    taskTimeoutsRef.current.clear()
     fileUrlRef.current = fileUrl || null
     setAnalysisReport({})
     setSectionErrors({})
@@ -709,15 +725,15 @@ const FilmWorkspace = memo(function FilmWorkspace({
     return () => { mounted = false; };
   }, [scriptId, projectId, projectName, userEmail, fileUrl, generateIfMissing, hydrationAttempt])
 
-  // Generate only the first three dashboards automatically, in strict order.
-  // The remaining dashboards require an explicit user action below.
+  // Generate all seven dashboards automatically, one section and one task at a time.
+  // A failed section is skipped so it cannot block the remaining dashboards.
   useEffect(() => {
     if (!hydrated || !generationEnabled || inflightRef.current.size > 0) return
     const nextSection = AUTO_GENERATED_SECTIONS.find(
-      (section) => !readySectionsRef.current[section],
+      (section) => !readySectionsRef.current[section] && !loadingSections[section] && !sectionErrors[section],
     )
     if (nextSection) analyzeSection(nextSection)
-  }, [hydrated, generationEnabled, readySections]);
+  }, [hydrated, generationEnabled, readySections, loadingSections, sectionErrors]);
 
   // Persist once, after all seven socket responses have filled the dashboard.
   useEffect(() => {
@@ -804,7 +820,6 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const sectionError = activeSection ? sectionErrors[activeSection] || null : null
   const sectionReady = activeSection ? !!readySections[activeSection] : true
   const readyDashboardCount = FILM_ANALYSIS_SECTIONS.filter((section) => readySections[section]).length
-  const automaticDashboardsReady = AUTO_GENERATED_SECTIONS.every((section) => !!readySections[section])
   const allDashboardsReady = hydrated && FILM_ANALYSIS_SECTIONS.every((section) => !!readySections[section])
 
   useEffect(() => {
@@ -1054,10 +1069,10 @@ const FilmWorkspace = memo(function FilmWorkspace({
         </button>
       </div>
 
-      {hydrated && generationEnabled && automaticDashboardsReady && !allDashboardsReady && (
+      {hydrated && generationEnabled && !allDashboardsReady && (
         <div className="border-b border-border bg-[#0a0a0a]/65 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-2">
-            <span className="mr-1 text-xs text-muted-foreground">Generate remaining dashboards:</span>
+            <span className="mr-1 text-xs text-muted-foreground">Analysis queue:</span>
             {MANUAL_GENERATED_SECTIONS.filter((section) => !readySections[section]).map((section) => {
               const busy = !!loadingSections[section]
               const anotherSectionIsRunning = inflightRef.current.size > 0 && !busy
