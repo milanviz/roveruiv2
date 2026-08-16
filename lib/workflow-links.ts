@@ -9,6 +9,7 @@ export const WORKFLOW_LINKS = {
   USER_DETAILS: "workflow.trigger/6a808ee4c2d02f1db00f8ee3",
   PROJECT_LIST: "workflow.trigger/6a8091a187061342c60acce2",
   CREATE_PROJECT: "workflow.trigger/6a8092676a4c74d61e08e6e2",
+  PROJECT_META: "workflow.trigger/6a8089cd9ffd9321e006a792",
   SHARE_PROJECT: "workflow.exec/roverprojectshare664dbc92c3028",
   ARCHIVE_PROJECT: "workflow.exec/roverprojectarchive66603dce19f00",
 

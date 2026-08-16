@@ -25,6 +25,8 @@ import { FILM_ANALYSIS_SECTIONS, coerceJsonObject, fetchSummarizeWorkflow } from
 import { buildSectionPromptTasks, FILM_ANALYSIS_TASKS, tasksForSection, type FilmAnalysisTask } from "@/lib/film-prompts"
 import { useVizruRealtime } from "@/lib/use-vizru-realtime"
 
+type PromptTask = FilmAnalysisTask & { prompt: string }
+
 interface FilmWorkspaceProps {
   projectId: string
   scriptId?: string | null
@@ -50,8 +52,6 @@ const TAB_TO_SECTION: Record<string, FilmAnalysisSection> = {
 }
 
 const AUTO_GENERATED_SECTIONS: FilmAnalysisSection[] = FILM_ANALYSIS_SECTIONS
-const MANUAL_GENERATED_SECTIONS: FilmAnalysisSection[] = FILM_ANALYSIS_SECTIONS
-
 const SECTION_TO_TAB = Object.fromEntries(
   Object.entries(TAB_TO_SECTION).map(([tab, section]) => [section, tab]),
 ) as Record<FilmAnalysisSection, string>
@@ -78,21 +78,30 @@ const sectionNeedsRefresh = (section: FilmAnalysisSection, payload?: Record<stri
 
 const taskHasData = (taskKey: string, payload?: Record<string, unknown>) => {
   if (!payload) return false
-  const fields: Record<string, string[]> = {
-    overview: ["recommendation"],
-    story: ["storyScorecard"],
+  const requiredFields: Record<string, string[]> = {
+    "overview-summary": ["recommendation", "logline"],
+    "overview-scope": ["attributes", "risks"],
+    "story-scorecard": ["storyScorecard", "indianCinemaSignals"],
+    "story-timeline": ["timelineEvents", "tensionCurve"],
     characters: ["charactersList"],
-    "commercial-core": ["commercialViability"],
-    "commercial-forecast": ["grossPredictedRevenue", "collectionForecast"],
-    "commercial-audience": ["comparables", "marketingHooks"],
-    "production-logistics": ["productionSummary", "locationsList"],
+    "commercial-core": ["commercialViability", "distributionPotentials"],
+    "commercial-revenue": ["grossPredictedRevenue", "optimalReleaseWindow"],
+    "commercial-geography": ["collectionForecast"],
+    "commercial-audience": ["comparables", "audienceMetrics", "marketingHooks", "viralMoments"],
+    "production-summary": ["productionSummary"],
+    "production-logistics": ["locationsList", "castPlanning"],
     "production-budget": ["productionFeasibility", "budgetBreakdown"],
-    "development-notes": ["developmentNotes", "rewriteNotes"],
+    "development-notes": [],
     "development-impact": ["developmentImpact", "draftComparison"],
     "greenlight-decision": ["recommendation", "whyItWorks"],
-    "greenlight-actions": ["decisionMatrix", "investmentOutlook"],
+    "greenlight-matrix": ["decisionMatrix", "investmentOutlook"],
+    "greenlight-actions": ["killRisks", "nextSteps"],
   }
-  return (fields[taskKey] || []).some((field) => field in payload)
+  if (taskKey === "development-notes") {
+    return "developmentNotes" in payload || "rewriteNotes" in payload
+  }
+  const fields = requiredFields[taskKey] || []
+  return fields.length > 0 && fields.every((field) => field in payload)
 }
 
 const taskStatesFromSections = (
@@ -100,7 +109,7 @@ const taskStatesFromSections = (
 ) => Object.fromEntries(
   FILM_ANALYSIS_TASKS
     .filter((item) => taskHasData(item.key, sections[item.section]))
-    .map((item) => [item.socketTag, "ready" as const]),
+    .map((item) => [item.key, "ready" as const]),
 )
 
 /** Animated shimmer bar used inside skeleton layouts. */
@@ -150,6 +159,12 @@ const numberOrZero = (value: unknown) => {
 }
 
 const crore = (value: unknown) => `₹${numberOrZero(value).toFixed(1)} Cr`
+
+const compactPercentage = (value: unknown) => {
+  const text = String(value ?? "")
+  const match = text.match(/\b(?:100|[1-9]?\d)%/)
+  return match?.[0] || "Not quantified"
+}
 
 function SectionSkeleton({ sectionName }: { sectionName?: string }) {
   const label = sectionName ? SECTION_LABELS[sectionName] || sectionName : "this section"
@@ -346,8 +361,10 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const [hydrationAttempt, setHydrationAttempt] = useState(0)
   
   const inflightRef = useRef<Map<string, Promise<void>>>(new Map())
-  const taskQueuesRef = useRef<Map<FilmAnalysisSection, Array<FilmAnalysisTask & { prompt: string }>>>(new Map())
+  const taskQueuesRef = useRef<Map<FilmAnalysisSection, PromptTask[]>>(new Map())
   const taskTimeoutsRef = useRef<Map<string, number>>(new Map())
+  const currentTaskRef = useRef<Map<FilmAnalysisSection, PromptTask>>(new Map())
+  const taskRetriesRef = useRef<Map<string, number>>(new Map())
   const sectionPayloadsRef = useRef<Partial<Record<FilmAnalysisSection, Record<string, unknown>>>>({})
   const dashboardSavedRef = useRef(false)
   const readySectionsRef = useRef(readySections)
@@ -403,10 +420,11 @@ const FilmWorkspace = memo(function FilmWorkspace({
     }
 
     taskQueuesRef.current.set(section, queue.slice(1))
-    const nextTaskStates = { ...taskStatesRef.current, [nextTask.socketTag]: "loading" as const }
+    const nextTaskStates = { ...taskStatesRef.current, [nextTask.key]: "loading" as const }
     taskStatesRef.current = nextTaskStates
     setTaskStates(nextTaskStates)
     setLoadingSections(prev => ({ ...prev, [section]: true }))
+    currentTaskRef.current.set(section, nextTask)
     inflightRef.current.set(nextTask.socketTag, Promise.resolve())
 
     try {
@@ -423,25 +441,40 @@ const FilmWorkspace = memo(function FilmWorkspace({
         if (!inflightRef.current.has(nextTask.socketTag)) return
         failTask(nextTask, `${nextTask.key.replaceAll("-", " ")} timed out. Retry this analysis to fill the missing group.`)
       }, 90_000)
-      taskTimeoutsRef.current.set(nextTask.socketTag, timeout)
+      taskTimeoutsRef.current.set(nextTask.key, timeout)
     } catch (error: any) {
       console.error(`Failed to trigger ${nextTask.key}:`, error)
       failTask(nextTask, error?.message || `Failed to start ${nextTask.key.replaceAll("-", " ")}.`)
     }
   }
 
-  const failTask = (task: FilmAnalysisTask, message: string) => {
-    const timeout = taskTimeoutsRef.current.get(task.socketTag)
+  const failTask = (task: PromptTask, message: string) => {
+    const timeout = taskTimeoutsRef.current.get(task.key)
     if (timeout) window.clearTimeout(timeout)
-    taskTimeoutsRef.current.delete(task.socketTag)
-    const nextTaskStates = { ...taskStatesRef.current, [task.socketTag]: "error" as const }
+    taskTimeoutsRef.current.delete(task.key)
+    currentTaskRef.current.delete(task.section)
+    inflightRef.current.delete(task.socketTag)
+
+    const retryCount = taskRetriesRef.current.get(task.key) || 0
+    if (retryCount < 1) {
+      taskRetriesRef.current.set(task.key, retryCount + 1)
+      const nextTaskStates = { ...taskStatesRef.current, [task.key]: "queued" as const }
+      taskStatesRef.current = nextTaskStates
+      setTaskStates(nextTaskStates)
+      taskQueuesRef.current.set(task.section, [task, ...(taskQueuesRef.current.get(task.section) || [])])
+      setLoadingSections(prev => ({ ...prev, [task.section]: true }))
+      setSectionErrors(prev => ({ ...prev, [task.section]: null }))
+      window.setTimeout(() => void triggerNextTask(task.section), 750)
+      return
+    }
+
+    const nextTaskStates = { ...taskStatesRef.current, [task.key]: "error" as const }
     taskStatesRef.current = nextTaskStates
     setTaskStates(nextTaskStates)
-    inflightRef.current.delete(task.socketTag)
     setLoadingSections(prev => ({
       ...prev,
       [task.section]: tasksForSection(task.section).some((item) =>
-        nextTaskStates[item.socketTag] === "loading" || nextTaskStates[item.socketTag] === "queued"
+        nextTaskStates[item.key] === "loading" || nextTaskStates[item.key] === "queued"
       ),
     }))
     setSectionErrors(prev => ({ ...prev, [task.section]: message }))
@@ -449,12 +482,12 @@ const FilmWorkspace = memo(function FilmWorkspace({
   }
 
   /** Merge one task's socket payload into its parent dashboard section. */
-  const applyTaskPayload = (task: FilmAnalysisTask, payload: any) => {
+  const applyTaskPayload = (task: PromptTask, payload: any) => {
     const outputStr: unknown = payload?.output ?? payload
     const parsed = coerceJsonObject(outputStr)
 
-    if (!parsed) {
-      failTask(task, `No data returned for ${task.key.replaceAll("-", " ")}.`)
+    if (!parsed || !taskHasData(task.key, parsed)) {
+      console.warn(`[FilmWorkspace] Ignoring payload that does not match ${task.key}.`, parsed)
       return
     }
 
@@ -470,18 +503,20 @@ const FilmWorkspace = memo(function FilmWorkspace({
     persistPartialProgress()
     applyMetadata(parsed)
 
-    const nextTaskStates = { ...taskStatesRef.current, [task.socketTag]: "ready" as const }
+    const nextTaskStates = { ...taskStatesRef.current, [task.key]: "ready" as const }
     taskStatesRef.current = nextTaskStates
     setTaskStates(nextTaskStates)
-    const timeout = taskTimeoutsRef.current.get(task.socketTag)
+    const timeout = taskTimeoutsRef.current.get(task.key)
     if (timeout) window.clearTimeout(timeout)
-    taskTimeoutsRef.current.delete(task.socketTag)
+    taskTimeoutsRef.current.delete(task.key)
+    taskRetriesRef.current.delete(task.key)
+    currentTaskRef.current.delete(task.section)
     inflightRef.current.delete(task.socketTag)
 
     const sectionTasks = tasksForSection(task.section)
-    const complete = sectionTasks.every((item) => nextTaskStates[item.socketTag] === "ready")
+    const complete = sectionTasks.every((item) => nextTaskStates[item.key] === "ready")
     const stillLoading = sectionTasks.some((item) =>
-      nextTaskStates[item.socketTag] === "loading" || nextTaskStates[item.socketTag] === "queued"
+      nextTaskStates[item.key] === "loading" || nextTaskStates[item.key] === "queued"
     )
     setLoadingSections(prev => ({ ...prev, [task.section]: stillLoading }))
     if (complete) {
@@ -495,16 +530,21 @@ const FilmWorkspace = memo(function FilmWorkspace({
     void triggerNextTask(task.section)
   }
 
-  // Every prompt task has a stable realtime tag, so responses can arrive out of order.
-  FILM_ANALYSIS_TASKS.forEach(task => {
+  // Calls are sequential, so every task can use the backend's stable section event.
+  FILM_ANALYSIS_SECTIONS.forEach(section => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    useVizruRealtime(task.socketTag, (payload: any) => {
-      console.log(`[FilmWorkspace] socket → ${task.socketTag}`, payload)
+    useVizruRealtime(section, (payload: any) => {
+      const task = currentTaskRef.current.get(section)
+      if (!task) return
+      console.log(`[FilmWorkspace] socket → ${section} (${task.key})`, payload)
       applyTaskPayload(task, payload)
     })
   })
 
   const analyzeSection = async (section: FilmAnalysisSection, force = false) => {
+    // Keep every workflow invocation globally sequential, including the short
+    // automatic retry window between two attempts.
+    if (inflightRef.current.size > 0 || taskQueuesRef.current.size > 0) return
     if (!fileUrlRef.current) {
       // Try to fetch fileUrl if missing
       if (scriptId) {
@@ -547,12 +587,13 @@ const FilmWorkspace = memo(function FilmWorkspace({
           expected_budget: metadata.expectedBudget,
       });
       const tasksToRun = retryFailedOnly
-        ? allTasks.filter((task) => taskStatesRef.current[task.socketTag] === "error")
+        ? allTasks.filter((task) => taskStatesRef.current[task.key] === "error")
         : allTasks
 
       const nextTaskStates = { ...taskStatesRef.current }
       tasksToRun.forEach((task) => {
-        nextTaskStates[task.socketTag] = "queued"
+        nextTaskStates[task.key] = "queued"
+        taskRetriesRef.current.delete(task.key)
       })
       taskStatesRef.current = nextTaskStates
       setTaskStates(nextTaskStates)
@@ -583,6 +624,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
     dashboardSavedRef.current = false
     inflightRef.current.clear()
     taskQueuesRef.current.clear()
+    currentTaskRef.current.clear()
+    taskRetriesRef.current.clear()
     taskTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout))
     taskTimeoutsRef.current.clear()
     fileUrlRef.current = fileUrl || null
@@ -627,17 +670,19 @@ const FilmWorkspace = memo(function FilmWorkspace({
         const savedTaskStates = taskStatesFromSections(saved.sections)
         setTaskStates(savedTaskStates)
         taskStatesRef.current = savedTaskStates
-        dashboardSavedRef.current = true
-        setGenerationEnabled(false)
         if (saved.file_full_url) fileUrlRef.current = saved.file_full_url
         const merged = Object.assign({}, ...FILM_ANALYSIS_SECTIONS.map((section) => saved.sections[section]))
         setAnalysisReport(merged)
         FILM_ANALYSIS_SECTIONS.forEach((section) => applyMetadata(saved.sections[section]))
-        const complete = Object.fromEntries(
-          FILM_ANALYSIS_SECTIONS.map((section) => [section, true]),
-        )
+        const complete = Object.fromEntries(FILM_ANALYSIS_SECTIONS.map((section) => [
+          section,
+          tasksForSection(section).every((task) => savedTaskStates[task.key] === "ready"),
+        ]))
+        const allComplete = FILM_ANALYSIS_SECTIONS.every((section) => complete[section])
+        dashboardSavedRef.current = allComplete
         setReadySections(complete)
         readySectionsRef.current = complete
+        setGenerationEnabled(generateIfMissing && !allComplete)
         setHydrated(true)
         return true
       }
@@ -659,7 +704,10 @@ const FilmWorkspace = memo(function FilmWorkspace({
         const merged = Object.assign({}, ...availableSections.map((section) => progress.sections[section]))
         setAnalysisReport(merged)
         availableSections.forEach((section) => applyMetadata(progress.sections[section]))
-        const complete = Object.fromEntries(availableSections.map((section) => [section, true]))
+        const complete = Object.fromEntries(availableSections.map((section) => [
+          section,
+          tasksForSection(section).every((task) => partialTaskStates[task.key] === "ready"),
+        ]))
         setReadySections(complete)
         readySectionsRef.current = complete
         return true
@@ -728,7 +776,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
   // Generate all seven dashboards automatically, one section and one task at a time.
   // A failed section is skipped so it cannot block the remaining dashboards.
   useEffect(() => {
-    if (!hydrated || !generationEnabled || inflightRef.current.size > 0) return
+    if (!hydrated || !generationEnabled || inflightRef.current.size > 0 || taskQueuesRef.current.size > 0) return
     const nextSection = AUTO_GENERATED_SECTIONS.find(
       (section) => !readySectionsRef.current[section] && !loadingSections[section] && !sectionErrors[section],
     )
@@ -821,6 +869,10 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const sectionReady = activeSection ? !!readySections[activeSection] : true
   const readyDashboardCount = FILM_ANALYSIS_SECTIONS.filter((section) => readySections[section]).length
   const allDashboardsReady = hydrated && FILM_ANALYSIS_SECTIONS.every((section) => !!readySections[section])
+  const activeGenerationSection = FILM_ANALYSIS_SECTIONS.find((section) => loadingSections[section])
+  const failedSections = FILM_ANALYSIS_SECTIONS.filter(
+    (section) => !readySections[section] && !loadingSections[section] && !!sectionErrors[section],
+  )
 
   useEffect(() => {
     if (activeTab === "Ask Rover" && !allDashboardsReady) setActiveTab("Overview")
@@ -894,8 +946,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
     name: c.name,
     role: c.role,
     description: c.description || c.desc || "",
-    presence: c.presence,
-    dialogue: c.dialogue || c.dialogues || "",
+    presence: compactPercentage(c.presence),
+    dialogue: compactPercentage(c.dialogue || c.dialogues),
     arc: c.arc,
     casting: c.casting,
     goal: c.goal,
@@ -990,11 +1042,11 @@ const FilmWorkspace = memo(function FilmWorkspace({
   const taskReady = (key: string) => {
     const task = FILM_ANALYSIS_TASKS.find((item) => item.key === key)
     if (!task) return false
-    return taskStates[task.socketTag] === "ready" || taskHasData(key, sectionPayloadsRef.current[task.section])
+    return taskStates[task.key] === "ready" || taskHasData(key, sectionPayloadsRef.current[task.section])
   }
   const taskLoading = (key: string) => {
     const task = FILM_ANALYSIS_TASKS.find((item) => item.key === key)
-    return !!task && (taskStates[task.socketTag] === "loading" || taskStates[task.socketTag] === "queued")
+    return !!task && (taskStates[task.key] === "loading" || taskStates[task.key] === "queued")
   }
   const needsRefresh = (section: FilmAnalysisSection) =>
     !loadingSections[section] && sectionNeedsRefresh(section, sectionPayloadsRef.current[section])
@@ -1071,25 +1123,30 @@ const FilmWorkspace = memo(function FilmWorkspace({
 
       {hydrated && generationEnabled && !allDashboardsReady && (
         <div className="border-b border-border bg-[#0a0a0a]/65 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-2">
-            <span className="mr-1 text-xs text-muted-foreground">Analysis queue:</span>
-            {MANUAL_GENERATED_SECTIONS.filter((section) => !readySections[section]).map((section) => {
-              const busy = !!loadingSections[section]
-              const anotherSectionIsRunning = inflightRef.current.size > 0 && !busy
-              const label = SECTION_TO_TAB[section]
-              return (
+          <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {activeGenerationSection ? <Loader2 className="size-4 shrink-0 animate-spin text-[#75A5ED]" /> : <Activity className="size-4 shrink-0 text-muted-foreground" />}
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-slate-200">
+                  {activeGenerationSection ? `Generating ${SECTION_TO_TAB[activeGenerationSection]} analysis` : "Analysis queue is waiting"}
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">{readyDashboardCount} of {FILM_ANALYSIS_SECTIONS.length} dashboards complete · card groups run one at a time</p>
+              </div>
+            </div>
+            <div className="h-1.5 w-28 overflow-hidden rounded-full bg-secondary sm:w-40">
+              <div className="h-full rounded-full bg-[#75A5ED] transition-all" style={{ width: `${(readyDashboardCount / FILM_ANALYSIS_SECTIONS.length) * 100}%` }} />
+            </div>
+            {failedSections.map((section) => (
                 <button
                   key={section}
-                  onClick={() => analyzeSection(section)}
-                  disabled={busy || anotherSectionIsRunning}
-                  title={sectionErrors[section] || `Generate the ${label} dashboard`}
-                  className="focus-ring flex min-h-9 items-center gap-1.5 rounded-lg border border-[#75A5ED]/25 bg-[#75A5ED]/10 px-3 py-1.5 text-xs font-medium text-[#8cb6f4] transition hover:bg-[#75A5ED]/20 disabled:cursor-not-allowed disabled:opacity-45"
+                  onClick={() => analyzeSection(section, true)}
+                  disabled={inflightRef.current.size > 0 || taskQueuesRef.current.size > 0}
+                  title={sectionErrors[section] || `Retry ${SECTION_TO_TAB[section]}`}
+                  className="focus-ring flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                  {busy ? `Generating ${label}…` : `Generate ${label}`}
+                  <RefreshCw className="size-3.5" /> Retry {SECTION_TO_TAB[section]}
                 </button>
-              )
-            })}
+            ))}
           </div>
         </div>
       )}
@@ -1522,7 +1579,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 {charactersList.map((char, idx) => (
                   <Card key={idx} className="bg-[#131315] border-border hover:border-border/80 transition-all flex flex-col justify-between h-auto overflow-visible">
                     <CardContent className="p-5 space-y-4">
@@ -1542,25 +1599,25 @@ const FilmWorkspace = memo(function FilmWorkspace({
                       </div>
 
                       {/* Stat figures */}
-                      <div className="grid grid-cols-3 gap-2 text-center bg-[#191919] p-2 rounded-lg border border-border/40">
+                      <div className="grid grid-cols-3 gap-3 rounded-xl border border-border/40 bg-[#191919] p-4 text-center">
                         <div>
                           <span className="text-[10px] text-muted-foreground block">Presence</span>
-                          <span className="text-xs font-semibold text-slate-200">{char.presence}</span>
+                          <span className="mt-1 block text-xs font-semibold text-slate-200">{char.presence}</span>
                         </div>
                         <div>
                           <span className="text-[10px] text-muted-foreground block">Dialogues</span>
-                          <span className="text-xs font-semibold text-slate-200">{char.dialogue}</span>
+                          <span className="mt-1 block text-xs font-semibold text-slate-200">{char.dialogue}</span>
                         </div>
                         <div>
                           <span className="text-[10px] text-muted-foreground block">Arc</span>
-                          <span className="text-xs font-semibold text-slate-200">{char.arc}</span>
+                          <span className="mt-1 block text-xs font-semibold text-slate-200">{char.arc}</span>
                         </div>
                       </div>
 
                       {/* Summary fields */}
                       <p className="text-xs text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">{char.description}</p>
                       
-                      <div className="space-y-2 text-xs pt-1 border-t border-border/30">
+                      <div className="grid gap-4 border-t border-border/30 pt-4 text-xs sm:grid-cols-2">
                         <div>
                           <strong className="text-slate-400 block text-[10px]">GOAL</strong>
                           <span className="text-slate-200">{char.goal}</span>
@@ -1574,8 +1631,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
                           <span className="text-slate-200">{char.conflict}</span>
                         </div>
                         <div>
-                          <strong className="text-slate-400 block text-[10px]">RESOLUTION</strong>
-                          <span className="text-slate-200">{char.resolution}</span>
+                          <strong className="text-slate-400 block text-[10px]">TRANSFORMATION</strong>
+                          <span className="text-slate-200">{char.transformation}</span>
                         </div>
                       </div>
 
@@ -1657,14 +1714,13 @@ const FilmWorkspace = memo(function FilmWorkspace({
                   </section>
                 )}
 
-                {taskLoading("commercial-forecast") ? <AnalysisGroupSkeleton cards={3} /> : (
-                  <section className="space-y-5">
+                <section className="space-y-5">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Planning estimate</p>
                       <h3 className="mt-1 text-lg font-semibold text-slate-100">Revenue and release outlook</h3>
                       <p className="mt-1 text-xs text-muted-foreground">Heuristic screenplay-based ranges—not live box-office forecasts.</p>
                     </div>
-                    <div className="grid gap-6 lg:grid-cols-3">
+                    {taskLoading("commercial-revenue") ? <AnalysisGroupSkeleton cards={2} /> : <div className="grid gap-6 lg:grid-cols-3">
                       <Card className="border-border bg-[#131315] p-6">
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Likely gross revenue</p>
                         <p className="mt-3 text-3xl font-bold text-emerald-400">{crore(grossPredictedRevenue.likely)}</p>
@@ -1680,9 +1736,9 @@ const FilmWorkspace = memo(function FilmWorkspace({
                         <p className="mt-4 text-sm leading-6 text-slate-300">{optimalReleaseWindow.rationale || "Refresh this analysis to generate release guidance."}</p>
                         {!!optimalReleaseWindow.avoid?.length && <p className="mt-3 text-xs text-amber-400">Avoid: {optimalReleaseWindow.avoid.join(", ")}</p>}
                       </Card>
-                    </div>
+                    </div>}
 
-                    <Card className="border-border bg-[#131315]">
+                    {taskLoading("commercial-geography") ? <AnalysisGroupSkeleton cards={2} /> : <Card className="border-border bg-[#131315]">
                       <CardContent className="space-y-5 p-6">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                           <div>
@@ -1720,9 +1776,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
                           </table>
                         </div>
                       </CardContent>
-                    </Card>
-                  </section>
-                )}
+                    </Card>}
+                </section>
 
                 {taskLoading("commercial-audience") ? <AnalysisGroupSkeleton cards={2} /> : (
                   <section className="space-y-6">
@@ -1816,13 +1871,12 @@ const FilmWorkspace = memo(function FilmWorkspace({
                   </section>
                 )}
 
-                {taskLoading("production-logistics") ? <AnalysisGroupSkeleton cards={3} /> : (
-                  <section className="space-y-6">
+                <section className="space-y-6">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Production footprint</p>
                       <h3 className="mt-1 text-lg font-semibold text-slate-100">Schedule and resource demands</h3>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    {taskLoading("production-summary") ? <AnalysisGroupSkeleton cards={3} /> : <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                       {[
                         { label: "Shoot days", val: productionSummary.shootDays, icon: Clock, color: "text-blue-400" },
                         { label: "Locations", val: productionSummary.locations, icon: MapPin, color: "text-emerald-400" },
@@ -1839,8 +1893,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
                           <p className="mt-1 text-2xl font-bold text-slate-100">{item.val}</p>
                         </Card>
                       ))}
-                    </div>
-                    <div className="grid gap-6 xl:grid-cols-2">
+                    </div>}
+                    {taskLoading("production-logistics") ? <AnalysisGroupSkeleton cards={2} /> : <div className="grid gap-6 xl:grid-cols-2">
                       <Card className="border-border bg-[#131315]">
                         <CardContent className="p-6">
                           <h3 className="text-sm font-semibold text-slate-100">Location complexity</h3>
@@ -1858,9 +1912,8 @@ const FilmWorkspace = memo(function FilmWorkspace({
                           <div className="mt-5 space-y-4">{castPlanning.map((cast, index) => <div key={index} className="grid gap-2 border-b border-border/40 pb-4 last:border-0 sm:grid-cols-[1fr_auto]"><div><p className="text-xs font-semibold text-slate-200">{cast.character}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{cast.performance}</p></div><div className="text-left sm:text-right"><p className="text-xs text-[#8cb6f4]">{cast.starDependency}</p><p className="mt-1 text-[10px] text-muted-foreground">{cast.shootDays} days</p></div></div>)}</div>
                         </CardContent>
                       </Card>
-                    </div>
-                  </section>
-                )}
+                    </div>}
+                </section>
 
                 {!taskLoading("production-budget") && (
                   <Card className="border-border bg-[#131315]">
@@ -1996,53 +2049,52 @@ const FilmWorkspace = memo(function FilmWorkspace({
                   </section>
                 )}
 
-                {taskLoading("greenlight-actions") ? <AnalysisGroupSkeleton cards={3} /> : (
-                  <section className="space-y-6">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Decision matrix</p>
-                      <h3 className="mt-1 text-lg font-semibold text-slate-100">Investment and execution conditions</h3>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      {[
-                        { label: "Creative", value: decisionMatrix.creative, color: "bg-blue-400" },
-                        { label: "Commercial", value: decisionMatrix.commercial, color: "bg-emerald-400" },
-                        { label: "Production", value: decisionMatrix.production, color: "bg-purple-400" },
-                        { label: "Readiness", value: decisionMatrix.readiness, color: "bg-amber-400" },
-                      ].map((item) => (
-                        <Card key={item.label} className="border-border bg-[#131315] p-5">
-                          <div className="flex items-end justify-between"><p className="text-xs font-semibold text-slate-300">{item.label}</p><p className="text-xl font-bold text-slate-100">{item.value || 0}</p></div>
-                          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-secondary"><div className={"h-full rounded-full " + item.color} style={{ width: item.value + "%" }} /></div>
-                        </Card>
-                      ))}
-                    </div>
+                <section className="space-y-6">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#75A5ED]">Decision matrix</p>
+                    <h3 className="mt-1 text-lg font-semibold text-slate-100">Investment and execution conditions</h3>
+                  </div>
 
-                    <div className="grid gap-6 lg:grid-cols-3">
+                  {taskLoading("greenlight-matrix") ? <AnalysisGroupSkeleton cards={2} /> : (
+                    <>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        {[
+                          { label: "Creative", value: decisionMatrix.creative, color: "bg-blue-400" },
+                          { label: "Commercial", value: decisionMatrix.commercial, color: "bg-emerald-400" },
+                          { label: "Production", value: decisionMatrix.production, color: "bg-purple-400" },
+                          { label: "Readiness", value: decisionMatrix.readiness, color: "bg-amber-400" },
+                        ].map((item) => (
+                          <Card key={item.label} className="border-border bg-[#131315] p-5">
+                            <div className="flex items-end justify-between"><p className="text-xs font-semibold text-slate-300">{item.label}</p><p className="text-xl font-bold text-slate-100">{item.value || 0}</p></div>
+                            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-secondary"><div className={"h-full rounded-full " + item.color} style={{ width: item.value + "%" }} /></div>
+                          </Card>
+                        ))}
+                      </div>
                       <Card className="border-border bg-[#131315] p-6">
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Investment outlook</p>
-                        <dl className="mt-5 space-y-4 text-xs">
-                          <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Risk level</dt><dd className="font-semibold text-amber-400">{investmentOutlook.riskLevel}</dd></div>
-                          <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Return potential</dt><dd className="font-semibold text-emerald-400">{investmentOutlook.returnPotential}</dd></div>
-                          <div><dt className="text-muted-foreground">Capital fit</dt><dd className="mt-2 leading-5 text-slate-300">{investmentOutlook.capitalFit}</dd></div>
-                        </dl>
-                        {!!investmentOutlook.conditions?.length && <ul className="mt-5 space-y-2 border-t border-border/50 pt-5 text-xs leading-5 text-muted-foreground">{investmentOutlook.conditions.map((item: string, index: number) => <li key={index}>• {item}</li>)}</ul>}
+                        <div className="mt-5 grid gap-5 md:grid-cols-3">
+                          <div><p className="text-[10px] uppercase text-muted-foreground">Risk level</p><p className="mt-2 text-lg font-semibold text-amber-400">{investmentOutlook.riskLevel}</p></div>
+                          <div><p className="text-[10px] uppercase text-muted-foreground">Return potential</p><p className="mt-2 text-lg font-semibold text-emerald-400">{investmentOutlook.returnPotential}</p></div>
+                          <div><p className="text-[10px] uppercase text-muted-foreground">Capital fit</p><p className="mt-2 text-xs leading-5 text-slate-300">{investmentOutlook.capitalFit}</p></div>
+                        </div>
+                        {!!investmentOutlook.conditions?.length && <ul className="mt-5 grid gap-3 border-t border-border/50 pt-5 text-xs leading-5 text-muted-foreground md:grid-cols-2">{investmentOutlook.conditions.map((item: string, index: number) => <li key={index}>• {item}</li>)}</ul>}
                       </Card>
-                      <Card className="border-border bg-[#131315] p-6 lg:col-span-2">
+                    </>
+                  )}
+
+                  {taskLoading("greenlight-actions") ? <AnalysisGroupSkeleton cards={2} /> : (
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      <Card className="border-border bg-[#131315] p-6">
                         <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-100"><AlertTriangle className="size-4 text-red-400" /> What could kill the project</h4>
-                        <div className="mt-5 grid gap-4 sm:grid-cols-2">{killRisks.map((risk, index) => <div key={index} className="rounded-lg border border-red-500/15 bg-red-500/5 p-4"><p className="text-xs font-semibold text-slate-200">{risk.title} <span className="font-normal text-red-400">· {risk.severity}</span></p><p className="mt-2 text-xs leading-5 text-muted-foreground">{risk.summary}</p></div>)}{!killRisks.length && <p className="text-xs text-muted-foreground">No kill risks identified yet.</p>}</div>
+                        <div className="mt-5 space-y-4">{killRisks.map((risk, index) => <div key={index} className="rounded-lg border border-red-500/15 bg-red-500/5 p-4"><p className="text-xs font-semibold text-slate-200">{risk.title} <span className="font-normal text-red-400">· {risk.severity}</span></p><p className="mt-2 text-xs leading-5 text-muted-foreground">{risk.summary}</p></div>)}{!killRisks.length && <p className="text-xs text-muted-foreground">No kill risks identified yet.</p>}</div>
+                      </Card>
+                      <Card className="border-border bg-[#131315] p-6">
+                        <h3 className="text-sm font-semibold text-slate-100">Recommended next steps</h3>
+                        <div className="mt-6 space-y-5">{nextSteps.map((step, index) => <div key={index} className="flex gap-4"><div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#75A5ED]/30 bg-[#75A5ED]/10 text-xs font-bold text-[#8cb6f4]">{index + 1}</div><div><p className="text-xs font-semibold text-slate-200">{step.step}</p>{(step.owner || step.timing) && <p className="mt-1 text-[10px] text-muted-foreground">{[step.owner, step.timing].filter(Boolean).join(" · ")}</p>}</div></div>)}{!nextSteps.length && <p className="text-xs text-muted-foreground">Next steps will appear after analysis.</p>}</div>
                       </Card>
                     </div>
-
-                    <Card className="border-border bg-[#131315]">
-                      <CardContent className="p-6">
-                        <h3 className="text-sm font-semibold text-slate-100">Recommended next steps</h3>
-                        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                          {nextSteps.map((step, index) => <div key={index} className="flex gap-4"><div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#75A5ED]/30 bg-[#75A5ED]/10 text-xs font-bold text-[#8cb6f4]">{index + 1}</div><div><p className="text-xs font-semibold text-slate-200">{step.step}</p>{(step.owner || step.timing) && <p className="mt-1 text-[10px] text-muted-foreground">{[step.owner, step.timing].filter(Boolean).join(" · ")}</p>}</div></div>)}
-                          {!nextSteps.length && <p className="text-xs text-muted-foreground">Next steps will appear after analysis.</p>}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </section>
-                )}
+                  )}
+                </section>
               </div>
             </SectionStatus>
           )}

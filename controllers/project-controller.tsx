@@ -206,6 +206,37 @@ export const ProjectCreateController = async (
         // The specialist is UI metadata; database writes use only the supplied headers.
         projectData[0].AIAgent = aiAgent;
 
+        const projectMeta = {
+            project_id: projectData[0].ProjectID || projectId,
+            "Screenplay Title": String(filmMeta?.title ?? researchTopic),
+            "Screenplay Language": String(filmMeta?.language ?? ""),
+            Genre: String(filmMeta?.genre ?? ""),
+            "Target Market / Industry": String(filmMeta?.targetMarket ?? filmMeta?.target_market ?? ""),
+            "Release Strategy": String(filmMeta?.releaseStrategy ?? filmMeta?.release_strategy ?? ""),
+            "Expected Budget (Optional)": String(filmMeta?.expectedBudget ?? filmMeta?.expected_budget ?? ""),
+        };
+        let metadataSyncError: unknown = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+                await postFields(WORKFLOW_LINKS.PROJECT_META, {
+                    project_meta: JSON.stringify(projectMeta),
+                });
+                metadataSyncError = null;
+                break;
+            } catch (error) {
+                metadataSyncError = error;
+            }
+        }
+        if (!metadataSyncError) {
+            localStorage.removeItem(`pending_project_meta_${projectMeta.project_id}`);
+        } else {
+            // Project creation has already succeeded; retain the payload for a
+            // later retry instead of turning a metadata-sync issue into a
+            // duplicate project on the user's next submission.
+            localStorage.setItem(`pending_project_meta_${projectMeta.project_id}`, JSON.stringify(projectMeta));
+            console.error("Failed to sync project metadata:", metadataSyncError);
+        }
+
         if (projectData[0].ProjectID) {
             // Extract questions from the API response if available
             const questionsFromResponse = returnedRow?.questions;
