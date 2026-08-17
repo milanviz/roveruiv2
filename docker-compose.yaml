@@ -1,0 +1,9 @@
+services:
+  roveruiv2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: roveruiv2-app
+    restart: unless-stopped
+    ports:
+      - "3000:80"
