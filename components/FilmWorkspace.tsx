@@ -809,14 +809,17 @@ const FilmWorkspace = memo(function FilmWorkspace({
         console.error("Cached dashboard lookup failed:", error)
       }
 
+      let hasPartialProgress = false
       try {
         const progress = JSON.parse(localStorage.getItem(`film_dashboard_progress_${projectId}`) || "null")
-        if (mounted) applyPartialProgress(progress)
+        if (mounted && applyPartialProgress(progress)) {
+          hasPartialProgress = true
+        }
       } catch (error) {
         console.error("Partial dashboard progress lookup failed:", error)
       }
 
-      if (generateIfMissing && scriptId) {
+      if ((generateIfMissing || hasPartialProgress) && scriptId) {
         try {
           const result = await workflows.fetchMetadataWorkflow(scriptId)
           if (!mounted) return
@@ -828,7 +831,7 @@ const FilmWorkspace = memo(function FilmWorkspace({
       }
       if (!mounted) return
 
-      if (generateIfMissing) {
+      if (generateIfMissing || hasPartialProgress || fileUrlRef.current) {
         setGenerationEnabled(true)
       } else {
         const message = savedLookupError

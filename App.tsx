@@ -22,11 +22,25 @@ function CurrentPage() {
   const showProjectSidebar = projectPage && !pathname.startsWith("/projects/project-create")
   const showCommonHeader = pathname.startsWith("/projects/insights")
 
+  const isAskRover = pathname.startsWith("/projects/ask-rover")
+  const isInsights = pathname.startsWith("/projects/insights")
+  const isProjectWorkspace = isAskRover || isInsights
+
   let page = <DashboardContent />
   if (pathname === "/projects" || pathname === "/projects/") page = <ProjectLists />
   else if (pathname.startsWith("/projects/project-create")) page = <ProjectCreate />
-  else if (pathname.startsWith("/projects/ask-rover")) page = <ProjectDetail />
-  else if (pathname.startsWith("/projects/insights")) page = <SavedInsightsContent />
+  else if (isProjectWorkspace) {
+    page = (
+      <>
+        <div className={`h-full ${isAskRover ? "flex flex-1 flex-col overflow-hidden" : "hidden"}`}>
+          <ProjectDetail />
+        </div>
+        <div className={`h-full ${isInsights ? "flex flex-1 flex-col overflow-hidden" : "hidden"}`}>
+          <SavedInsightsContent />
+        </div>
+      </>
+    )
+  }
 
   return (
     <div className="flex flex-1 overflow-hidden">
